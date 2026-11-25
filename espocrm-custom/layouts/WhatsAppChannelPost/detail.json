@@ -1,0 +1,19 @@
+[
+  { "label": "Overview", "rows": [
+    [ { "name": "name" }, { "name": "status" } ],
+    [ { "name": "channelName" }, { "name": "channelJid" } ],
+    [ { "name": "postedAt" }, { "name": "publishedAt" } ],
+    [ { "name": "mediaType" }, { "name": "serverId" } ]
+  ]},
+  { "label": "Content", "rows": [
+    [ { "name": "body", "fullWidth": true } ],
+    [ { "name": "mediaUrl", "fullWidth": true } ]
+  ]},
+  { "label": "Engagement", "rows": [
+    [ { "name": "viewsCount" }, { "name": "forwardsCount" } ],
+    [ { "name": "reactionsCount" } ]
+  ]},
+  { "label": "Diagnostics", "rows": [
+    [ { "name": "messageId" }, { "name": "lastError" } ]
+  ]}
+]

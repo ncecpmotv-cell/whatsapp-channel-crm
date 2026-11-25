@@ -1,0 +1,7 @@
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+exec mariadbd --defaults-file=/data/data/com.termux/files/usr/etc/my.cnf \
+  --datadir=/data/data/com.termux/files/usr/var/lib/mysql \
+  --socket=/data/data/com.termux/files/usr/var/run/mysqld.sock \
+  --port=3306 --bind-address=127.0.0.1 --skip-name-resolve \
+  --innodb-buffer-pool-size=48M --performance-schema=OFF --max-connections=30

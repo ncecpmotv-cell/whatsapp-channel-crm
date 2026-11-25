@@ -1,0 +1,44 @@
+# secrets & runtime state
+.env
+*.env
+!.env.example
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# WhatsApp session / GOWA storage (NEVER commit)
+storages/
+whatsapp.db*
+qr*.png
+*.qr
+
+# EspoCRM runtime
+espocrm/data/
+espocrm/custom/Espo/Custom/Resources/metadata/app/
+espocrm/*.log
+logs/
+*.log
+
+# database dumps
+*.sql
+*.sql.gz
+*.dump
+
+# build artefacts
+bin/whatsapp
+gowa.zip
+whatsapp_*_linux_arm64.zip
+*.o
+*.a
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# editors / OS
+.DS_Store
+.idea/
+.vscode/

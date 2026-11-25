@@ -1,0 +1,15 @@
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+HOME=/data/data/com.termux/files/home
+export SSL_CERT_FILE="${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}"
+export SSL_CERT_DIR="${SSL_CERT_DIR:-$PREFIX/etc/tls}"
+# A dedicated tailnet node running entirely inside Termux:
+# userspace-networking needs no root and no /dev/net/tun on Android.
+# proot supplies the /etc/resolv.conf and CA bundle every Go binary expects.
+exec proot -b "$HOME/gowa-espo/etc/resolv.conf:/etc/resolv.conf" \
+  -b "$PREFIX/etc/tls/cert.pem:/etc/ssl/certs/ca-certificates.crt" \
+  "$HOME/gowa-espo/bin/tailscaled" \
+  --tun=userspace-networking \
+  --state="$HOME/gowa-espo/var/tailscaled.state" \
+  --socket="$HOME/gowa-espo/var/tailscaled.sock" \
+  --port=41641

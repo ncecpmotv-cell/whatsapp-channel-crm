@@ -1,0 +1,18 @@
+# MariaDB tuning for a 2.7 GB Android phone (Termux, no root).
+# Verified on MariaDB 13.1.2 / Huawei P Smart 2019.
+[mysqld]
+# Keep the buffer pool small: MariaDB must not compete with Android itself.
+innodb_buffer_pool_size = 48M
+innodb_log_buffer_size = 4M
+innodb_flush_method = O_DIRECT
+performance_schema = OFF
+max_connections = 30
+table_open_cache = 64
+tmp_table_size = 16M
+max_heap_table_size = 16M
+sort_buffer_size = 512K
+join_buffer_size = 512K
+bind-address = 127.0.0.1
+skip-name-resolve
+# Android/Termux: no systemd, no /run
+socket = /data/data/com.termux/files/usr/var/run/mysqld.sock

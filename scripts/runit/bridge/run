@@ -1,0 +1,6 @@
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+HOME=/data/data/com.termux/files/home
+cd "$HOME/gowa-espo/bridge" || exit 1
+export PYTHONUNBUFFERED=1
+exec python3 "$HOME/gowa-espo/bridge/app.py"

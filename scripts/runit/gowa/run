@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+HOME=/data/data/com.termux/files/home
+cd "$HOME/gowa-espo" || exit 1
+set -a; . "$HOME/gowa-espo/.env"; set +a
+# Android has no /etc/resolv.conf (Go resolver) and no /etc/ssl/certs (TLS).
+# proot bind-mounts both without needing root or a full distro (~10 MB).
+export SSL_CERT_FILE="${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}"
+export SSL_CERT_DIR="${SSL_CERT_DIR:-$PREFIX/etc/tls}"
+exec proot -b "$HOME/gowa-espo/etc/resolv.conf:/etc/resolv.conf" \
+  -b "$PREFIX/etc/tls/cert.pem:/etc/ssl/certs/ca-certificates.crt" \
+  "$HOME/gowa-espo/bin/whatsapp" rest \
+  --host "${GOWA_HOST:-127.0.0.1}" \
+  --port "${GOWA_PORT:-3000}" \
+  --webhook "${GOWA_WEBHOOK_URL:-http://127.0.0.1:8085/webhook/gowa}" \
+  --webhook-secret "$GOWA_WEBHOOK_SECRET" \
+  --webhook-events "$GOWA_WEBHOOK_EVENTS" \
+  --ui-enabled=false \
+  --mcp-enabled=false \
+  --auto-download-media=false

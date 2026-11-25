@@ -1,0 +1,16 @@
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+HOME=/data/data/com.termux/files/home
+# Reverse tunnel to the server's PUBLIC IP — deliberately not Tailscale, so a
+# tailnet outage or a shared-node permission change cannot lock the device out.
+# The server must allow this port in authorized_keys:
+#   permitlisten="127.0.0.1:2225"
+# Self-healing: reconnect every 5s forever.
+while true; do
+  ssh -N -T -R 127.0.0.1:2225:127.0.0.1:8022 ubuntu@REPLACE_WITH_SERVER_IP \
+    -i "$HOME/.ssh/id_rt" \
+    -o StrictHostKeyChecking=accept-new -o BatchMode=yes \
+    -o ServerAliveInterval=20 -o ServerAliveCountMax=3 \
+    -o ExitOnForwardFailure=yes
+  sleep 5
+done

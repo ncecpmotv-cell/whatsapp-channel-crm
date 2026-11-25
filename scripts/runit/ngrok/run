@@ -1,0 +1,14 @@
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+HOME=/data/data/com.termux/files/home
+export SSL_CERT_FILE="${SSL_CERT_FILE:-$PREFIX/etc/tls/cert.pem}"
+export SSL_CERT_DIR="${SSL_CERT_DIR:-$PREFIX/etc/tls}"
+# ngrok is a Go binary: like GOWA it reads /etc/resolv.conf and /etc/ssl/certs,
+# neither of which exists on Android. proot binds both.
+# The public hostname and Basic-auth policy live outside the repo (secrets).
+exec proot -b "$HOME/gowa-espo/etc/resolv.conf:/etc/resolv.conf" \
+  -b "$PREFIX/etc/tls/cert.pem:/etc/ssl/certs/ca-certificates.crt" \
+  "$HOME/gowa-espo/bin/ngrok" http 8081 \
+  --url="https://${NGROK_DOMAIN:?set NGROK_DOMAIN}" \
+  --traffic-policy-file="$HOME/gowa-espo/etc/ngrok-policy.yml" \
+  --log=stdout --log-format=logfmt

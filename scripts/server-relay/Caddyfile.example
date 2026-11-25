@@ -1,0 +1,18 @@
+# Stable HTTPS entry for the phone-hosted CRM.
+# Caddy obtains a real Let's Encrypt certificate for the sslip.io hostname
+# (no account, no domain purchase: sslip.io maps the IP encoded in the name).
+# Bound to the instance's private IP so it does not collide with Tailscale's
+# listener on 100.86.11.20:443.
+{
+	admin off
+	email admin@example.invalid
+}
+
+https://84-8-97-31.sslip.io {
+	bind 10.0.0.19
+	header {
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000"
+	}
+	reverse_proxy 127.0.0.1:18082
+}

@@ -1,0 +1,17 @@
+{
+  "entity": true,
+  "object": true,
+  "tab": true,
+  "acl": true,
+  "module": "Custom",
+  "icon": "fas fa-bullhorn",
+  "color": "#25D366",
+  "type": "Base",
+  "stream": true,
+  "statusField": "status",
+  "orderBy": "postedAt",
+  "orderDirection": "desc",
+  "defaultSearchScope": "searched",
+  "isCustom": true,
+  "disabled": false
+}

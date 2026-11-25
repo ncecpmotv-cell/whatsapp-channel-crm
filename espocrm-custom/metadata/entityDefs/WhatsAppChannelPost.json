@@ -1,0 +1,96 @@
+{
+  "fields": {
+    "name": {
+      "type": "varchar",
+      "required": true,
+      "trim": true,
+      "maxLength": 255
+    },
+    "channelJid": {
+      "type": "varchar",
+      "required": true,
+      "maxLength": 128
+    },
+    "channelName": {
+      "type": "varchar",
+      "maxLength": 255
+    },
+    "messageId": {
+      "type": "varchar",
+      "maxLength": 128
+    },
+    "serverId": {
+      "type": "int"
+    },
+    "body": {
+      "type": "text"
+    },
+    "mediaType": {
+      "type": "enum",
+      "options": [
+        "none",
+        "image",
+        "video",
+        "audio",
+        "document",
+        "sticker"
+      ],
+      "default": "none"
+    },
+    "mediaUrl": {
+      "type": "varchar",
+      "maxLength": 1000
+    },
+    "postedAt": {
+      "type": "datetime"
+    },
+    "viewsCount": {
+      "type": "int",
+      "default": 0
+    },
+    "forwardsCount": {
+      "type": "int",
+      "default": 0
+    },
+    "reactionsCount": {
+      "type": "int",
+      "default": 0
+    },
+    "status": {
+      "type": "enum",
+      "options": [
+        "New",
+        "Ready to Publish",
+        "Published",
+        "Failed"
+      ],
+      "default": "New",
+      "style": {
+        "New": "default",
+        "Ready to Publish": "warning",
+        "Published": "success",
+        "Failed": "danger"
+      }
+    },
+    "publishedAt": {
+      "type": "datetime"
+    },
+    "lastError": {
+      "type": "text"
+    }
+  },
+  "links": {},
+  "indexes": {
+    "idx_message_id": {
+      "columns": [
+        "messageId"
+      ]
+    },
+    "idx_channel_posted": {
+      "columns": [
+        "channelJid",
+        "postedAt"
+      ]
+    }
+  }
+}

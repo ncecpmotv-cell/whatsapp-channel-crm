@@ -1,0 +1,6 @@
+[
+  { "name": "name" },
+  { "name": "channelName" },
+  { "name": "status" },
+  { "name": "postedAt" }
+]
