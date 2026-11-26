@@ -219,6 +219,13 @@ button.subtle,a.subtle{background:transparent;border:1px solid var(--line);color
 button.subtle:hover{color:var(--ink);border-color:var(--ink-2)}
 button.subtle.danger{color:#c98b8b;border-color:#4a2f2f}
 button.subtle.danger:hover{color:#e8a0a0;border-color:#7a4444}
+/* ---- editor (post detail) -------------------------------------------- */
+.notice{border-color:var(--accent);background:rgba(197,160,89,.08);margin-bottom:10px}
+.notice b{color:var(--accent);font-size:var(--fs-2)}
+.editor label{display:block;margin:0 0 10px}
+.editor input,.editor textarea{width:100%;margin:0}
+.editor textarea{min-height:140px;line-height:1.6}
+.editor > button,.editor button[type=submit]{width:100%}
 /* ---- pagination ------------------------------------------------------- */
 .pager{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;
   margin:18px 0 6px}
@@ -689,23 +696,20 @@ def _bars(series: list[dict], key: str) -> str:
     return f'<div class="chart">{bars}</div>'
 
 
-def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
+def post_page(post: dict, history: list[dict], channel: dict | None, notice: str = "") -> bytes:
     views = post.get("views") or 0
     forwards = post.get("forwards") or 0
     reactions = post.get("reactions") or 0
     engagement = round((forwards + reactions) * 100 / views, 2) if views else 0
     pid = esc(post["id"])
     actions = ""
-    if post["status"] == "draft":
-        actions += (
-            f'<form method="post" action="/ui/content/schedule">'
-            f'<input type="hidden" name="id" value="{pid}">'
-            f'<input type="datetime-local" name="at" required><button class="ghost">جدولة</button></form>')
     if post["status"] in ("draft", "scheduled"):
+        publish_class = "" if post["status"] == "scheduled" else "ghost"
         actions += (
             f'<form method="post" action="/ui/content/publish" '
             f"onsubmit=\"return confirm('النشر إلى القناة لا يمكن التراجع عنه. أرسِل الآن؟')\">"
-            f'<input type="hidden" name="id" value="{pid}"><button>نشر الآن</button></form>')
+            f'<input type="hidden" name="id" value="{pid}">'
+            f'<button class="{publish_class}">نشر الآن</button></form>')
     if post["status"] == "scheduled":
         actions += (
             f'<form method="post" action="/ui/content/status">'
@@ -756,42 +760,88 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
   <button>حفظ التعديل</button>
 </form>
 """
-    stats_rows = "".join(
-        f'<tr><td>{esc(h["day"])}</td><td>{esc(h["views"])}</td><td>{esc(h["forwards"])}</td>'
-        f'<td>{esc(h["reactions"])}</td></tr>'
-        for h in reversed(history)
-    ) or '<tr><td colspan="4" class="muted">لا لقطات بعد</td></tr>'
-    body = f"""
-<p><a href="/ui/content" class="muted">← المحتوى</a></p>
-<h1>{esc(post["title"] or "بدون عنوان")}</h1>
-<div class="row"><div>{badge(post["status"])} <span class="muted">· {esc(TYPE_AR.get(post.get("media_type") or "text", "نص"))} · {esc(post.get("created_by"))}</span></div>
-<span class="muted">{esc(channel.get("name") if channel else post.get("channel_jid"))}</span></div>
-<div class="grid" style="margin-top:12px">
+    editable = post["status"] in ("draft", "scheduled")
+    when = post.get("scheduled_at")
+    when_value = ""
+    if when:
+        local = dt.datetime.utcfromtimestamp(int(when)) + dt.timedelta(hours=TZ_OFFSET)
+        when_value = local.strftime("%Y-%m-%dT%H:%M")
+    type_label = TYPE_AR.get(post.get("media_type") or "text", "نص")
+    channel_label = esc((channel or {}).get("name") or "")
+
+    author = esc(post.get("created_by") or "")
+    meta = [type_label, f"بواسطة {author}" if author else "", channel_label]
+    meta_line = " · ".join(m for m in meta if m)
+    when_line = ""
+    if post["status"] == "scheduled" and when:
+        when_line = f'<p class="muted meta">🕒 يُنشر {fmt_ts(when)}</p>'
+    elif post.get("published_at"):
+        when_line = f'<p class="muted meta">✅ نُشر {fmt_ts(post["published_at"])}</p>'
+
+    editor = ""
+    if editable:
+        schedule_label = "إعادة الجدولة إلى" if post["status"] == "scheduled" else "جدولة إلى (اختياري)"
+        save_class = "ghost" if post["status"] == "scheduled" else ""
+        save_hint = ("حفظ يحدّث الموعد إن غيّرته." if post["status"] == "scheduled"
+                     else "أضف موعدًا ليُجدول تلقائيًا، أو اتركه فارغًا ليبقى مسودة.")
+        editor = f"""
+<h2>محتوى المنشور</h2>
+<form method="post" action="/ui/content/edit" class="editor">
+  <input type="hidden" name="id" value="{esc(post["id"])}">
+  <label>العنوان
+    <input name="title" value="{esc(post.get("title") or "")}" placeholder="عنوان مختصر"></label>
+  <label>النص
+    <textarea name="body" rows="7" placeholder="نص المنشور">{esc(post.get("body") or "")}</textarea></label>
+  <label>{schedule_label}
+    <input type="datetime-local" name="at" value="{when_value}"></label>
+  <button class="{save_class}">حفظ التعديل</button>
+  <p class="muted" style="margin:6px 0 0">{save_hint}</p>
+</form>"""
+
+    metrics = ""
+    if post["status"] == "published" or views:
+        stats_rows = "".join(
+            f'<tr><td>{esc(h["day"])}</td><td>{esc(h["views"])}</td><td>{esc(h["forwards"])}</td>'
+            f'<td>{esc(h["reactions"])}</td></tr>'
+            for h in reversed(history)
+        ) or '<tr><td colspan="4" class="muted">لا لقطات بعد</td></tr>'
+        metrics = f"""
+<h2>الأداء</h2>
+<div class="grid">
   <div class="stat"><b>{esc(views)}</b><span>مشاهدات</span></div>
   <div class="stat"><b>{esc(forwards)}</b><span>إعادة تمرير</span></div>
   <div class="stat"><b>{esc(reactions)}</b><span>تفاعل</span></div>
   <div class="stat"><b>{esc(engagement)}%</b><span>معدل التفاعل</span></div>
 </div>
-<div class="card">
-  <div class="row"><span class="muted">مجدول: {fmt_ts(post.get("scheduled_at"))}</span>
-  <span class="muted">نُشر: {fmt_ts(post.get("published_at"))}</span></div>
-  <div class="row"><span class="muted">server_id: {esc(post.get("server_id") or "—")}</span>
-  <span class="muted">message_id: {esc(post.get("message_id") or "—")}</span></div>
-</div>
-<h2>النص</h2>
-<div class="card"><pre>{esc(post.get("body") or "")}</pre></div>
-{error}
-<h2>تطور التفاعل</h2>
 <div class="card">{_bars(history, "views")}</div>
 <div class="card"><table style="width:100%;border-collapse:collapse">
 <tr class="muted"><td>اليوم</td><td>مشاهدات</td><td>تمرير</td><td>تفاعل</td></tr>
 {stats_rows}
-</table></div>
+</table></div>"""
+
+    ids = ""
+    if post.get("server_id") or post.get("message_id"):
+        ids = (f'<p class="muted meta">server_id {esc(post.get("server_id") or "—")} · '
+               f'message_id {esc(post.get("message_id") or "—")}</p>')
+
+    body_html = f"""
+<p><a href="/ui/content" class="muted">← المحتوى</a></p>
+<div class="post-head" style="margin-bottom:8px">
+  <h1 style="margin:0;font-size:var(--fs-4);line-height:1.35">{esc(post["title"] or "بدون عنوان")}</h1>
+  {badge(post["status"])}
+</div>
+<p class="muted meta">{meta_line}</p>
+{when_line}
+{"" if not notice else f'<div class="card notice"><b>{esc(notice)}</b></div>'}
+{editor}
+{"" if editable else f'<h2>النص</h2><div class="card"><pre>{esc(post.get("body") or "")}</pre></div>'}
+{error}
 {poll_block}
-<div class="row" style="margin-top:8px">{actions}{delete_block}</div>
-{edit_block}
+{metrics}
+{ids}
+{"" if not actions and not delete_block else '<div class="post-actions" style="margin-top:12px">' + actions + delete_block + "</div>"}
 """
-    return page(post["title"] or "منشور", body, "content")
+    return page(post["title"] or "منشور", body_html, "content")
 
 
 # --------------------------------------------------------------------- channel

@@ -184,6 +184,13 @@ button.subtle,a.subtle{background:transparent;border:1px solid var(--line);color
 button.subtle:hover{color:var(--ink);border-color:var(--ink-2)}
 button.subtle.danger{color:#c98b8b;border-color:#4a2f2f}
 button.subtle.danger:hover{color:#e8a0a0;border-color:#7a4444}
+/* ---- editor (post detail) -------------------------------------------- */
+.notice{border-color:var(--accent);background:rgba(197,160,89,.08);margin-bottom:10px}
+.notice b{color:var(--accent);font-size:var(--fs-2)}
+.editor label{display:block;margin:0 0 10px}
+.editor input,.editor textarea{width:100%;margin:0}
+.editor textarea{min-height:140px;line-height:1.6}
+.editor > button,.editor button[type=submit]{width:100%}
 /* ---- pagination ------------------------------------------------------- */
 .pager{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;
   margin:18px 0 6px}

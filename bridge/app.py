@@ -272,7 +272,11 @@ class Handler(BaseHTTPRequestHandler):
             if not post:
                 return self._send(404, {"error": "post not found"})
             channel = crm.get_channel_info(post["channel_jid"])
-            return self._send_html(200, ui.post_page(post, crm.post_history(post_id, 30), channel))
+            notice = {"no_date": "أدخل موعد النشر أولًا ثم اضغط «جدولة».",
+                      "published": "لا يمكن تعديل منشور منشور على القناة.",
+                      "not_editable": "هذه الحالة لا تسمح بالتعديل."}.get(
+                          (query.get("error") or [""])[0], "")
+            return self._send_html(200, ui.post_page(post, crm.post_history(post_id, 30), channel, notice))
         if path == "/ui/channel":
             jid = (self.bridge.cfg.newsletter_jids or ("",))[0]
             return self._send_html(200, ui.channel_page(
@@ -498,8 +502,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._delete_content(crm, raw)
         if path == "/ui/content/schedule":
             at = ui.parse_local_datetime(form.get("at") or "")
-            if form.get("id") and at:
-                crm.schedule_post(form["id"], at, approved=True)
+            post_id = form.get("id")
+            if post_id and at:
+                crm.schedule_post(post_id, at, approved=True)
+                return self._redirect(f"/ui/post/{post_id}?ok=scheduled")
+            if post_id:
+                return self._redirect(f"/ui/post/{post_id}?error=no_date")
             return self._redirect("/ui/content")
         if path == "/ui/content/publish":
             post_id = form.get("id")
@@ -507,6 +515,7 @@ class Handler(BaseHTTPRequestHandler):
                 crm.update_channel_post(post_id, {"status": "scheduled", "scheduled_at": int(time.time())})
                 self.bridge.store.enqueue("publish", post_id, {"postId": post_id})
                 self.bridge.drain_outbox()
+                return self._redirect(f"/ui/post/{post_id}?ok=published")
             return self._redirect("/ui/content")
         if path == "/ui/contacts/new":
             if form.get("phone"):
