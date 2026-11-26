@@ -21,9 +21,9 @@ class CrmTest(unittest.TestCase):
             "channel_jid": "1203630@newsletter", "title": "t", "body": "hello"})
         self.assertEqual(post["status"], "draft")
 
-        # agent proposal (not approved) -> review with a time, not scheduled
+        # agent proposal (not approved) -> stays draft with a proposed time
         self.crm.schedule_post(post["id"], 1000, approved=False)
-        self.assertEqual(self.crm.get_channel_post(post["id"])["status"], "review")
+        self.assertEqual(self.crm.get_channel_post(post["id"])["status"], "draft")
         self.assertEqual(self.crm.due_posts(), [])
 
         # human approval -> scheduled and due

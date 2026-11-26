@@ -229,6 +229,9 @@ class Handler(BaseHTTPRequestHandler):
         "deal_added": "أُضيفت الفرصة.",
         "done": "أُنجزت المتابعة.",
         "read": "قُرئت الإشعارات.",
+        "cancelled": "أُلغي العنصر — بقي في الأرشيف بحالة ملغى.",
+        "restored": "أُعيد العنصر كمسودة.",
+        "status": "حُدِّثت الحالة.",
     }
 
     def _ui_get(self, path: str, query: dict):
@@ -237,7 +240,7 @@ class Handler(BaseHTTPRequestHandler):
         ui.TZ_OFFSET = self.bridge.cfg.tz_offset
         ui.set_unread(crm.unread_notifications())
         if path in ("/ui", "/ui/"):
-            scheduled = crm.list_posts("scheduled", 10) + crm.list_posts("review", 10)
+            scheduled = crm.list_posts("scheduled", 10)
             scheduled.sort(key=lambda p: p.get("scheduled_at") or 0)
             return self._send_html(200, ui.dashboard(
                 stats=crm.stats(), scheduled=scheduled, followups=crm.followups(0),
@@ -252,9 +255,11 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 page = 1
             per_page = 15
-            rows = crm.list_posts(status or None, per_page + 1, (page - 1) * per_page)
-            has_next = len(rows) > per_page
-            return self._send_html(200, ui.content_page(rows[:per_page], status, error, page, has_next))
+            total = crm.count_posts(status or None)
+            pages = max(1, (total + per_page - 1) // per_page)
+            page = min(page, pages)
+            rows = crm.list_posts(status or None, per_page, (page - 1) * per_page)
+            return self._send_html(200, ui.content_page(rows, status, error, page, pages))
         if path == "/ui/contacts":
             q = (query.get("q") or [""])[0]
             return self._send_html(200, ui.contacts_page(crm.list_contacts(q or None)))
@@ -415,13 +420,51 @@ class Handler(BaseHTTPRequestHandler):
             crm.update_channel_post(post_id, {
                 "title": (fields.get("title") or "").strip() or None,
                 "body": (fields.get("body") or "").strip() or None,
-            }, allowed_statuses=("idea", "draft", "review", "scheduled"))
+            }, allowed_statuses=("draft", "scheduled"))
             at = ui.parse_local_datetime(fields.get("at") or "")
             if at:
                 crm.schedule_post(post_id, at, approved=True)
         except (ValueError, PermissionError):
             return self._redirect(f"/ui/post/{post_id}?error=not_editable")
         return self._redirect(f"/ui/post/{post_id}?ok=updated")
+
+    def _cancel_content(self, crm, raw: bytes):
+        fields, _ = self._form(raw)
+        post_id = fields.get("id")
+        if not post_id:
+            return self._redirect("/ui/content")
+        try:
+            crm.cancel_post(post_id)
+            return self._redirect("/ui/content?ok=cancelled")
+        except (ValueError, PermissionError):
+            return self._redirect(f"/ui/post/{post_id}?error=published")
+
+    def _restore_content(self, crm, raw: bytes):
+        fields, _ = self._form(raw)
+        post_id = fields.get("id")
+        if not post_id:
+            return self._redirect("/ui/content")
+        try:
+            crm.restore_post(post_id)
+            return self._redirect("/ui/content?ok=restored")
+        except (ValueError, PermissionError):
+            return self._redirect("/ui/content")
+
+    def _set_content_status(self, crm, raw: bytes):
+        fields, _ = self._form(raw)
+        post_id = fields.get("id")
+        target = (fields.get("status") or "").strip()
+        if not post_id:
+            return self._redirect("/ui/content")
+        try:
+            if target == "draft":
+                crm.update_channel_post(
+                    post_id, {"status": "draft", "scheduled_at": None},
+                    allowed_statuses=("draft", "scheduled"))
+                return self._redirect("/ui/content?ok=status")
+        except (ValueError, PermissionError):
+            pass
+        return self._redirect("/ui/content")
 
     def _delete_content(self, crm, raw: bytes):
         fields, _ = self._form(raw)
@@ -444,6 +487,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._create_content(crm, raw)
         if path == "/ui/content/edit":
             return self._edit_content(crm, raw)
+        if path == "/ui/content/cancel":
+            return self._cancel_content(self.bridge.crm, raw)
+        if path == "/ui/content/restore":
+            return self._restore_content(self.bridge.crm, raw)
+        if path == "/ui/content/status":
+            return self._set_content_status(self.bridge.crm, raw)
         if path == "/ui/content/delete":
             return self._delete_content(crm, raw)
         if path == "/ui/content/schedule":

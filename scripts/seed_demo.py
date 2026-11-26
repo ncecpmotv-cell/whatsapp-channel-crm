@@ -55,9 +55,9 @@ posts = [
     ("كواليس جلسة تصوير كافيه صفّ", "لقطات من الكواليس + الإعدادات كاملة في المنشور التالي.", "published", -2 * 86400, 870, 21, 9),
     ("عرض نوفمبر: باقة 4 منشورات", "باقة نوفمبر تشمل 4 منشورات + تصميم + جدولة. الأماكن محدودة.", "published", -1 * 86400, 430, 12, 5),
     ("إعلان: خدمة جديدة للقنوات", "قريبًا: إدارة قناة واتساب كاملة بدل من 8 منشورات شهريًا.", "scheduled", 6 * 3600, 0, 0, 0),
-    ("سؤال للجمهور: أي نوع محتوى تفضّل؟", "شاركنا: تصوير منتجات، كواليس، أم نصائح سريعة؟", "review", 1 * 86400, 0, 0, 0),
+    ("سؤال للجمهور: أي نوع محتوى تفضّل؟", "شاركنا: تصوير منتجات، كواليس، أم نصائح سريعة؟", "draft", 1 * 86400, 0, 0, 0),
     ("ملاحظات عن تصوير الكافيهات", "ثلاث ملاحظات تكررت في آخر خمس جلسات.", "draft", None, 0, 0, 0),
-    ("فكرة: سلسلة أخطاء شائعة", "حلقة أسبوعية قصيرة عن خطأ واحد وتصحيحه.", "idea", None, 0, 0, 0),
+    ("ملاحظات: سلسلة أخطاء شائعة", "حلقة أسبوعية قصيرة عن خطأ واحد وتصحيحه.", "draft", None, 0, 0, 0),
 ]
 for title, body, status, offset, views, forwards, reactions in posts:
     post = crm.create_channel_post({
@@ -73,7 +73,7 @@ for title, body, status, offset, views, forwards, reactions in posts:
         crm.update_counters(post["id"], views, forwards, reactions)
     elif status == "scheduled":
         crm.schedule_post(post["id"], now + offset, approved=True)
-    elif status == "review":
+    elif status == "draft" and offset:
         crm.schedule_post(post["id"], now + offset, approved=False)
     elif status == "draft":
         crm.update_channel_post(post["id"], {"status": "draft"})

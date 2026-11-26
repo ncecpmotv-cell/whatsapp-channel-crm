@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS crm_posts (
     title        TEXT,
     body         TEXT NOT NULL DEFAULT '',
     status       TEXT NOT NULL DEFAULT 'draft'
-                 CHECK (status IN ('idea','draft','review','scheduled','publishing','published','failed')),
+                 CHECK (status IN ('draft','scheduled','publishing','published','failed')),
     scheduled_at INTEGER,
     published_at INTEGER,
     message_id   TEXT,
@@ -133,7 +133,8 @@ CREATE TABLE IF NOT EXISTS crm_channel_info (
 );
 """
 
-STAGES = ("idea", "draft", "review", "scheduled", "publishing", "published", "failed")
+STAGES = ("draft", "scheduled", "publishing", "published", "failed")
+LEGACY_STATUSES = {"idea": "draft", "review": "draft"}
 DEAL_STAGES = ("new", "contacted", "proposal", "negotiation", "won", "lost")
 CONTACT_STAGES = ("lead", "qualified", "customer", "partner", "cold")
 
@@ -155,6 +156,10 @@ class CrmClient:
         self._lock = store.lock
         with self._lock:
             self._conn.executescript(SCHEMA)
+            # one-way migration: legacy stages collapse into draft
+            for old, new in LEGACY_STATUSES.items():
+                self._conn.execute(
+                    "UPDATE crm_posts SET status = ? WHERE status = ?", (new, old))
             columns = {row[1] for row in self._conn.execute("PRAGMA table_info(crm_posts)")}
             if "meta" not in columns:
                 self._conn.execute("ALTER TABLE crm_posts ADD COLUMN meta TEXT")
@@ -405,15 +410,37 @@ class CrmClient:
         self._exec(f"UPDATE crm_posts SET {', '.join(sets)} WHERE id = ?", tuple(params))
         return self.get_channel_post(post_id) or {}
 
-    DELETABLE = ("idea", "draft", "review", "scheduled", "publishing", "failed")
+    DELETABLE = ("failed",)
+
+    def cancel_post(self, post_id: str) -> dict:
+        """Mark as cancelled (ملغى): keeps the record, stops any queued send."""
+        post = self.get_channel_post(post_id)
+        if not post:
+            raise ValueError("المنشور غير موجود")
+        if post["status"] == "published":
+            raise PermissionError("لا يمكن إلغاء منشور منشور على القناة")
+        self._exec("DELETE FROM outbox WHERE ref = ? AND status = 'pending'", (post_id,))
+        return self.update_channel_post(
+            post_id, {"status": "failed", "last_error": "أُلغي يدويًا"},
+            allowed_statuses=("draft", "scheduled", "publishing", "failed"),
+        )
+
+    def restore_post(self, post_id: str) -> dict:
+        """Bring a cancelled post back to draft."""
+        return self.update_channel_post(
+            post_id, {"status": "draft", "last_error": "", "scheduled_at": None},
+            allowed_statuses=("draft",),
+        )
 
     def delete_post(self, post_id: str) -> dict:
-        """Remove a post that has not been published. Cancels any queued send."""
+        """Permanently remove a cancelled post."""
         post = self.get_channel_post(post_id)
         if not post:
             raise ValueError("المنشور غير موجود")
         if post["status"] == "published":
             raise PermissionError("لا يمكن حذف منشور منشور على القناة")
+        if post["status"] != "failed":
+            raise PermissionError("ألغِ العنصر أولًا ثم احذفه نهائيًا")
         self._exec("DELETE FROM outbox WHERE ref = ? AND status IN ('pending','failed')", (post_id,))
         self._exec("DELETE FROM crm_stats WHERE post_id = ?", (post_id,))
         self._exec("DELETE FROM crm_posts WHERE id = ?", (post_id,))
@@ -471,11 +498,18 @@ class CrmClient:
         self.update_channel_post(post_id, {"status": "failed", "last_error": error[:1000]})
 
     def schedule_post(self, post_id: str, at: int, approved: bool) -> dict:
-        status = "scheduled" if approved else "review"
+        status = "scheduled" if approved else "draft"
         return self.update_channel_post(
             post_id, {"status": status, "scheduled_at": at},
-            allowed_statuses=None if approved else ("idea", "draft", "review"),
+            allowed_statuses=("draft", "scheduled", "failed"),
         )
+
+    def count_posts(self, status: str | None = None) -> int:
+        if status:
+            row = self._one("SELECT COUNT(*) AS n FROM crm_posts WHERE status = ?", (status,))
+        else:
+            row = self._one("SELECT COUNT(*) AS n FROM crm_posts")
+        return int((row or {}).get("n") or 0)
 
     # ------------------------------------------------------------------
     # metrics

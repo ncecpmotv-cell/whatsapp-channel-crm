@@ -12,13 +12,11 @@ import json
 from urllib.parse import parse_qs
 
 STAGES_AR = {
-    "idea": "فكرة",
     "draft": "مسودة",
-    "review": "مراجعة",
-    "scheduled": "مجدول",
+    "scheduled": "معتمد ومجدول",
     "publishing": "جارٍ النشر",
     "published": "منشور",
-    "failed": "فشل",
+    "failed": "ملغى",
 }
 TYPE_AR = {
     "text": "نص", "image": "صورة", "video": "فيديو", "audio": "صوت",
@@ -150,10 +148,8 @@ details.panel[open]>summary::after{transform:rotate(90deg)}
 details.panel>.body{padding:0 14px 14px}
 details.panel[open]>summary{border-bottom:1px solid var(--line)}
 /* ---- filter chips ----------------------------------------------------- */
-.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;
-  -webkit-overflow-scrolling:touch}
-.chips::-webkit-scrollbar{display:none}
-.chips a{flex:0 0 auto;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 10px}
+.chips a{display:inline-flex;align-items:center;min-height:38px;padding:0 12px;
   border-radius:999px;border:1px solid var(--line);background:var(--surface-1);color:var(--ink-2);
   font-size:var(--fs-1);text-decoration:none;white-space:nowrap;
   transition:background .15s ease,color .15s ease,border-color .15s ease,transform .12s ease}
@@ -194,9 +190,42 @@ details.panel[open]>summary{border-bottom:1px solid var(--line)}
   border-radius:var(--r-2);color:var(--ink-2)}
 .empty b{display:block;color:var(--ink);font-size:var(--fs-3);margin-bottom:6px}
 .empty [role=button]{margin-top:12px}
+/* ---- content card ----------------------------------------------------- */
+.post{display:flex;flex-direction:column;gap:0}
+.post-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
+.post-head .badge{flex:0 0 auto;margin-top:2px}
+.post-title{flex:1;min-width:0;font-size:var(--fs-2);font-weight:700;color:var(--ink);
+  text-decoration:none;line-height:1.5}
+.post-title:hover{color:var(--accent)}
+.post .meta{margin:0 0 6px;padding-inline-start:0}
+.post-body{margin:0 0 10px;font-size:var(--fs-2);line-height:1.6;color:var(--ink-2);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.post-error{margin:0 0 8px;font-size:var(--fs-1);color:var(--bad)}
+.post-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));
+  gap:8px;margin-top:2px}
+.post-actions form{display:flex;flex-direction:column;gap:6px;margin:0;min-width:0}
+.post-actions form:has(input[type=datetime-local]){grid-column:span 2}
+.post-actions input[type=datetime-local]{font-size:12px;min-height:40px;padding:4px 6px;margin:0;width:100%}
+.post-actions button{width:100%;font-size:12.5px;padding-inline:6px;min-height:42px;white-space:nowrap}
 /* ---- buttons ---------------------------------------------------------- */
 button.ghost,a.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
 button.ghost:hover,a.ghost:hover{background:var(--surface-2);border-color:var(--accent)}
+button.subtle,a.subtle{background:transparent;border:1px solid var(--line);color:var(--ink-2);font-weight:500}
+button.subtle:hover{color:var(--ink);border-color:var(--ink-2)}
+button.subtle.danger{color:#c98b8b;border-color:#4a2f2f}
+button.subtle.danger:hover{color:#e8a0a0;border-color:#7a4444}
+/* ---- pagination ------------------------------------------------------- */
+.pager{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;
+  margin:18px 0 6px}
+.pager .pg{min-width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:12px;color:var(--ink-2);text-decoration:none;
+  font-size:var(--fs-2);font-variant-numeric:tabular-nums;background:var(--surface-1)}
+.pager a.pg:hover{border-color:var(--accent);color:var(--ink)}
+.pager .pg.on{background:rgba(197,160,89,.14);border-color:var(--accent);color:var(--accent);font-weight:700}
+.pager .pg.nav{font-size:20px;line-height:1}
+.pager .pg.off{opacity:.35}
+.pager .pg.gap{border:none;background:transparent;min-width:20px;color:var(--ink-2)}
+.pager-info{text-align:center;margin:0 0 var(--sp-2)}
 /* ---- micro-interactions ----------------------------------------------- */
 .card,header.top nav a,.stat,button{transition:border-color .15s ease,transform .15s ease,opacity .15s ease}
 .card:active{transform:scale(.997)}
@@ -377,9 +406,9 @@ syncType();
 
 
 def content_page(posts: list[dict], status: str = "", error: str = "",
-                 page_no: int = 1, has_next: bool = False) -> bytes:
+                 page_no: int = 1, pages: int = 1) -> bytes:
     query = f"status={status}&" if status else ""
-    chip_items = [("", "الكل")] + [(k, v) for k, v in STAGES_AR.items()]
+    chip_items = [("", "الكل")] + [(k, v) for k, v in STAGES_AR.items() if k != "publishing"]
     filters = "".join(
         f'<a href="/ui/content{"?status=" + key if key else ""}" class="{"on" if status == key else ""}"'
         f'{" aria-current=\"true\"" if status == key else ""}>{esc(label)}</a>'
@@ -399,47 +428,79 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
 
     rows = []
     for p in posts:
+        pid = esc(p["id"])
         when = fmt_ts(p.get("scheduled_at") or p.get("published_at"))
         kind = p.get("media_type") or "text"
-        actions = ""
-        if p["status"] in ("idea", "draft", "review"):
-            actions = (
+        st = p["status"]
+        text = (p.get("body") or "").strip()
+        actions = []
+        if st == "draft":
+            actions.append(
                 f'<form method="post" action="/ui/content/schedule">'
-                f'<input type="hidden" name="id" value="{esc(p["id"])}">'
+                f'<input type="hidden" name="id" value="{pid}">'
                 f'<input type="datetime-local" name="at" required aria-label="موعد النشر">'
-                f'<button>جدولة</button></form>'
+                f'<button class="ghost">جدولة</button></form>')
+        if st in ("draft", "scheduled"):
+            actions.append(
                 f'<form method="post" action="/ui/content/publish" '
                 f"onsubmit=\"return confirm('النشر إلى القناة لا يمكن التراجع عنه. أرسِل الآن؟')\">"
-                f'<input type="hidden" name="id" value="{esc(p["id"])}">'
-                f'<button class="ghost">نشر الآن</button></form>'
-            )
-        delete = ""
-        if p["status"] != "published":
-            delete = (
+                f'<input type="hidden" name="id" value="{pid}">'
+                f'<button aria-label="نشر الآن">نشر</button></form>')
+        if st == "scheduled":
+            actions.append(
+                f'<form method="post" action="/ui/content/status">'
+                f'<input type="hidden" name="id" value="{pid}">'
+                f'<input type="hidden" name="status" value="draft">'
+                f'<button class="ghost" aria-label="إرجاع إلى مسودة">لمسودة</button></form>')
+        if st in ("draft", "scheduled", "publishing"):
+            actions.append(
+                f'<form method="post" action="/ui/content/cancel" '
+                f'data-confirm="إلغاء هذا العنصر؟ سيبقى في الأرشيف بحالة ملغى.">'
+                f'<input type="hidden" name="id" value="{pid}">'
+                f'<button class="subtle">إلغاء</button></form>')
+        if st == "failed":
+            actions.append(
+                f'<form method="post" action="/ui/content/restore">'
+                f'<input type="hidden" name="id" value="{pid}">'
+                f'<button class="ghost">استعادة كمسودة</button></form>')
+            actions.append(
                 f'<form method="post" action="/ui/content/delete" '
-                f"onsubmit=\"return confirm('حذف هذا العنصر نهائيًا؟')\">"
-                f'<input type="hidden" name="id" value="{esc(p["id"])}">'
-                f'<button class="ghost" style="border-color:var(--bad);color:var(--bad)">حذف</button></form>'
-            )
+                f'data-confirm="حذف نهائي؟ لا يمكن التراجع.">'
+                f'<input type="hidden" name="id" value="{pid}">'
+                f'<button class="subtle danger">حذف نهائي</button></form>')
+        actions_html = ("" if not actions
+                        else '<div class="post-actions">' + "".join(actions) + "</div>")
         rows.append(f"""
-<div class="card">
-  <div class="row">
-    <div class="stack">
-      <b><a href="/ui/post/{esc(p["id"])}">{esc(p["title"] or (p["body"] or "")[:70])}</a></b>
-      <span class="muted">{esc(TYPE_AR.get(kind, kind))} · {when} · {esc(p.get("created_by"))} · 👁 {esc(p.get("views") or 0)}</span>
-    </div>
-    {badge(p["status"])}
+<article class="card post">
+  <div class="post-head">
+    {badge(st)}
+    <a class="post-title" href="/ui/post/{pid}">{esc(p["title"] or text[:70] or "بدون عنوان")}</a>
   </div>
-  <pre>{esc((p["body"] or "")[:200])}</pre>
-  {"" if not p.get("last_error") else f'<p class="muted">خطأ: {esc(p["last_error"])}</p>'}
-  <div class="row" style="margin-top:6px">{actions}{delete}</div>
-</div>""")
+  <p class="muted meta">{esc(TYPE_AR.get(kind, kind))} · {when}</p>
+  {"" if not text else f'<p class="post-body">{esc(text[:160])}</p>'}
+  {"" if not p.get("last_error") else f'<p class="post-error">{esc(p["last_error"])}</p>'}
+  {actions_html}
+</article>""")
 
-    prev_link = (f'<a role="button" class="ghost" href="/ui/content?{query}page={page_no - 1}">السابق</a>'
-                 if page_no > 1 else "")
-    next_link = (f'<a role="button" class="ghost" href="/ui/content?{query}page={page_no + 1}">التالي</a>'
-                 if has_next else "")
-    pager = f'<div class="row" style="margin:10px 0">{prev_link}{next_link}</div>' if (prev_link or next_link) else ""
+    def page_link(n: int) -> str:
+        on = n == page_no
+        return (f'<a class="pg{" on" if on else ""}" href="/ui/content?{query}page={n}"'
+                f'{" aria-current=\"page\"" if on else ""}>{n}</a>')
+
+    pager = ""
+    if pages > 1:
+        nums, last = [], 0
+        for n in sorted({1, pages, *range(max(1, page_no - 2), min(pages, page_no + 2) + 1)}):
+            if n - last > 1:
+                nums.append('<span class="pg gap">…</span>')
+            nums.append(page_link(n))
+            last = n
+        prev_a = (f'<a class="pg nav" href="/ui/content?{query}page={page_no - 1}" aria-label="الصفحة السابقة">›</a>'
+                  if page_no > 1 else '<span class="pg nav off" aria-hidden="true">›</span>')
+        next_a = (f'<a class="pg nav" href="/ui/content?{query}page={page_no + 1}" aria-label="الصفحة التالية">‹</a>'
+                  if page_no < pages else '<span class="pg nav off" aria-hidden="true">‹</span>')
+        pager = (f'<nav class="pager" aria-label="ترقيم الصفحات">{prev_a}{"".join(nums)}{next_a}</nav>'
+                 f'<p class="muted pager-info">صفحة {page_no} من {pages}</p>')
 
     empty_state = ('<div class="empty"><b>لا محتوى بعد</b>'
                    '<p>ابدأ بأول فكرة أو مسودة، وسيظهر هنا.</p>'
@@ -595,16 +656,35 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
     forwards = post.get("forwards") or 0
     reactions = post.get("reactions") or 0
     engagement = round((forwards + reactions) * 100 / views, 2) if views else 0
+    pid = esc(post["id"])
     actions = ""
-    if post["status"] in ("idea", "draft", "review"):
-        actions = (
+    if post["status"] == "draft":
+        actions += (
             f'<form method="post" action="/ui/content/schedule">'
-            f'<input type="hidden" name="id" value="{esc(post["id"])}">'
-            f'<input type="datetime-local" name="at" required><button>جدولة</button></form>'
+            f'<input type="hidden" name="id" value="{pid}">'
+            f'<input type="datetime-local" name="at" required><button class="ghost">جدولة</button></form>')
+    if post["status"] in ("draft", "scheduled"):
+        actions += (
             f'<form method="post" action="/ui/content/publish" '
             f"onsubmit=\"return confirm('النشر إلى القناة لا يمكن التراجع عنه. أرسِل الآن؟')\">"
-            f'<input type="hidden" name="id" value="{esc(post["id"])}"><button class="ghost">نشر الآن</button></form>'
-        )
+            f'<input type="hidden" name="id" value="{pid}"><button>نشر الآن</button></form>')
+    if post["status"] == "scheduled":
+        actions += (
+            f'<form method="post" action="/ui/content/status">'
+            f'<input type="hidden" name="id" value="{pid}">'
+            f'<input type="hidden" name="status" value="draft">'
+            f'<button class="subtle">إرجاع لمسودة</button></form>')
+    if post["status"] in ("draft", "scheduled", "publishing"):
+        actions += (
+            f'<form method="post" action="/ui/content/cancel" '
+            f'data-confirm="إلغاء هذا العنصر؟ سيبقى في الأرشيف بحالة ملغى.">'
+            f'<input type="hidden" name="id" value="{pid}">'
+            f'<button class="subtle">إلغاء</button></form>')
+    if post["status"] == "failed":
+        actions += (
+            f'<form method="post" action="/ui/content/restore">'
+            f'<input type="hidden" name="id" value="{pid}">'
+            f'<button class="subtle">استعادة كمسودة</button></form>')
     error = "" if not post.get("last_error") else (
         f'<div class="card" style="border-color:var(--bad)"><b style="color:var(--bad)">آخر خطأ</b>'
         f'<pre>{esc(post["last_error"])}</pre></div>')
@@ -620,13 +700,14 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
                       '<p class="muted">قنوات واتساب لا تدعم الاستبيانات (خطأ 479).</p></div>')
     delete_block = ""
     edit_block = ""
-    if post["status"] != "published":
+    if post["status"] == "failed":
         delete_block = (
             f'<form method="post" action="/ui/content/delete" '
-            f"onsubmit=\"return confirm('حذف هذا العنصر نهائيًا؟')\">"
-            f'<input type="hidden" name="id" value="{esc(post["id"])}">'
-            f'<button class="ghost" style="border-color:var(--bad);color:var(--bad)">حذف</button></form>'
+            f'data-confirm="حذف نهائي؟ لا يمكن التراجع.">'
+            f'<input type="hidden" name="id" value="{pid}">'
+            f'<button class="subtle danger">حذف نهائي</button></form>'
         )
+    if post["status"] in ("draft", "scheduled"):
         edit_block = f"""
 <h2>تعديل</h2>
 <form method="post" action="/ui/content/edit">

@@ -20,7 +20,7 @@ log = logging.getLogger("bridge.mcp")
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 SERVER_INFO = {"name": "phone-crm-mcp", "version": "2.0.0"}
 INSTRUCTIONS = (
-    "CRM قناة واتساب على الجوال: محتوى (idea → draft → review → scheduled → published)، "
+    "CRM قناة واتساب على الجوال: محتوى (draft → معتمد/مجدول → published)، "
     "جهات اتصال وصفقات ومتابعات، وقياسات القناة. "
     "أنشئ مسودة بـ crm_create_channel_post ثم اقترح وقتًا بـ content_schedule — "
     "النشر النهائي قرار بشري من الواجهة."
@@ -78,7 +78,7 @@ TOOLS = [
                 "id": {"type": "string"},
                 "name": {"type": "string"},
                 "body": {"type": "string"},
-                "status": {"type": "string", "enum": ["idea", "draft", "review"]},
+                "status": {"type": "string", "enum": ["draft", "scheduled"]},
             },
             "required": ["id"],
         },
@@ -87,7 +87,7 @@ TOOLS = [
         "name": "content_schedule",
         "description": (
             "Propose a publish time (ISO-8601 or epoch). Without publish rights the post "
-            "becomes 'review' with the proposed time, waiting for human approval."
+            "becomes 'scheduled' with the proposed time; publishing stays a human decision."
         ),
         "inputSchema": {
             "type": "object",
@@ -311,12 +311,12 @@ class McpServer:
         fields = {k: args[k] for k in ("name", "body") if args.get(k) is not None}
         if self.can_publish and args.get("status"):
             fields["status"] = args["status"]
-        elif args.get("status") not in (None, "", "idea", "draft", "review"):
+        elif args.get("status") not in (None, "", "draft", "scheduled"):
             raise PermissionError("publishing status needs human approval in the UI")
         if not fields:
             raise McpError(-32602, "nothing to update")
         return self.crm.update_channel_post(args["id"], fields,
-                                            allowed_statuses=None if self.can_publish else ("idea", "draft", "review"))
+                                            allowed_statuses=None if self.can_publish else ("draft",))
 
     def _tool_content_schedule(self, args: dict) -> dict:
         if not args.get("id") or not args.get("at"):
@@ -328,7 +328,7 @@ class McpServer:
         return self.crm.schedule_post(args["id"], at, approved=self.can_publish)
 
     def _tool_crm_list_ready_posts(self, args: dict) -> dict:
-        posts = self.crm.list_posts("review", 50) + self.crm.list_posts("scheduled", 50)
+        posts = self.crm.list_posts("scheduled", 50)
         posts.sort(key=lambda p: p.get("scheduled_at") or 0)
         return {"count": len(posts), "list": posts}
 

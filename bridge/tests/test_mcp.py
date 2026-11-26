@@ -43,7 +43,7 @@ class McpTest(unittest.TestCase):
 
         sched = self.tool("content_schedule", {"id": post_id, "at": "2030-01-01T10:00:00+03:00"})
         self.assertFalse(sched["isError"])
-        self.assertEqual(self.crm.get_channel_post(post_id)["status"], "review")
+        self.assertEqual(self.crm.get_channel_post(post_id)["status"], "draft")
 
         bad = self.tool("crm_update_channel_post", {"id": post_id, "status": "scheduled"})
         self.assertTrue(bad["isError"])

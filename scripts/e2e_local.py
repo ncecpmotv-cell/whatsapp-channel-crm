@@ -173,7 +173,7 @@ def main() -> int:
         status, body, _ = http("POST", "/mcp", rpc, {"Authorization": f"Bearer {TOKEN}",
                                                     "Content-Type": "application/json"})
         row = client.get_channel_post(post_id)
-        check("agent proposal stays in review", row["status"] == "review", row["status"])
+        check("agent proposal stays draft", row["status"] == "draft", row["status"])
 
         # --- human approval + publish through the outbox
         form = urllib.parse.urlencode({"id": post_id}).encode()
