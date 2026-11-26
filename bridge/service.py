@@ -1,4 +1,8 @@
-"""Business logic for the GOWA <-> EspoCRM bridge."""
+"""Business logic: GOWA <-> local CRM (SQLite). No EspoCRM, no MariaDB.
+
+Inbound:  WhatsApp DM / channel post  -> CRM contact, timeline, content archive
+Outbound: approved content            -> outbox -> GOWA -> published + counters
+"""
 from __future__ import annotations
 
 import datetime as dt
@@ -9,7 +13,7 @@ import threading
 import time
 
 from config import Config
-from espocrm import EspoClient, EspoError
+from crm import CrmClient
 from gowa import GowaClient, GowaError
 from store import Store
 
@@ -23,7 +27,7 @@ BACKOFF_STEP = 30  # seconds
 # helpers
 # --------------------------------------------------------------------------
 def jid_to_phone(jid: str, default_cc: str = "") -> str | None:
-    """`9665xxxx@s.whatsapp.net` -> `+9665xxxx`. Returns None for non-phone JIDs."""
+    """`9665xxxx@s.whatsapp.net` -> `+9665xxxx`. None for non-phone JIDs."""
     if not jid or "@" not in jid:
         return None
     user = jid.split("@", 1)[0].split(":", 1)[0]
@@ -35,15 +39,15 @@ def jid_to_phone(jid: str, default_cc: str = "") -> str | None:
     return "+" + digits
 
 
-def to_espo_datetime(value) -> str | None:
-    """Accept ISO-8601 or epoch seconds and return Espo's UTC 'Y-m-d H:i:s'."""
+def to_epoch(value) -> int | None:
+    """Accept ISO-8601 or epoch seconds/milliseconds -> epoch seconds."""
     if value in (None, ""):
         return None
     if isinstance(value, (int, float)) or str(value).isdigit():
         stamp = float(value)
         if stamp > 1e11:  # milliseconds
             stamp /= 1000.0
-        return dt.datetime.fromtimestamp(stamp, dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+        return int(stamp)
     text = str(value).replace("Z", "+00:00")
     try:
         parsed = dt.datetime.fromisoformat(text)
@@ -51,7 +55,7 @@ def to_espo_datetime(value) -> str | None:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=dt.timezone.utc)
-    return parsed.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return int(parsed.timestamp())
 
 
 def subject_for(payload: dict) -> str:
@@ -80,12 +84,12 @@ def _first(payload: dict, *keys, default=None):
 # service
 # --------------------------------------------------------------------------
 class Bridge:
-    def __init__(self, cfg: Config, espo: EspoClient | None = None,
+    def __init__(self, cfg: Config, crm: CrmClient | None = None,
                  gowa: GowaClient | None = None, store: Store | None = None):
         self.cfg = cfg
-        self.espo = espo or EspoClient(cfg.espo_base_url, cfg.espo_api_key)
-        self.gowa = gowa or GowaClient(cfg.gowa_base_url, device_id=cfg.gowa_device_id)
         self.store = store or Store(cfg.db_path)
+        self.crm = crm or CrmClient(self.store)
+        self.gowa = gowa or GowaClient(cfg.gowa_base_url, device_id=cfg.gowa_device_id)
         self._stop = threading.Event()
         self.stats = {"inbound": 0, "channel_posts": 0, "dms": 0, "published": 0, "errors": 0}
 
@@ -115,14 +119,15 @@ class Bridge:
             self._stop.wait(self.cfg.poll_interval)
 
     def _channel_sync_loop(self) -> None:
-        # first run shortly after boot so a restart does not lose posts
-        self._stop.wait(15)
+        # Sync immediately on boot (a restart must not lose posts), then on interval.
         while not self._stop.is_set():
             try:
                 self.sync_channels()
                 self.sync_counters()
             except Exception:
                 log.exception("channel sync error")
+                self._stop.wait(5)
+                continue
             self._stop.wait(self.cfg.channel_sync_interval)
 
     # -- inbound: GOWA -----------------------------------------------------
@@ -161,25 +166,21 @@ class Bridge:
             return {"ok": True, "ignored": "duplicate"}
         sender = _first(payload, "sender_display_name", "from_name", "push_name", default="")
         try:
-            contact = self.espo.find_contact_by_phone(phone)
+            contact = self.crm.find_contact_by_phone(phone)
             created = False
             if not contact:
-                contact = self.espo.create_contact(phone, first_name=sender or phone)
+                contact = self.crm.create_contact(phone, first_name=sender or phone, jid=jid)
                 created = True
             body = (payload.get("body") or "").strip()
             media = media_type_for(payload)
             text = body if body else f"[{media}]"
-            stamp = to_espo_datetime(payload.get("timestamp"))
-            note = f"WhatsApp ({phone})"
-            if stamp:
-                note += f" · {stamp} UTC"
-            note += f": {text}"
-            self.espo.add_stream_note("Contact", contact["id"], note[:1500])
+            self.crm.add_message(contact["id"], "in", text, message_id=message_id,
+                                 media_type=media, at=to_epoch(payload.get("timestamp")))
             if message_id:
                 self.store.mark_seen(message_id)
             self.stats["dms"] += 1
             return {"ok": True, "contactId": contact["id"], "created": created}
-        except EspoError as exc:
+        except Exception as exc:  # noqa: BLE001
             self.stats["errors"] += 1
             log.error("DM mapping failed: %s", exc)
             return {"ok": False, "error": str(exc)[:200]}
@@ -193,26 +194,27 @@ class Bridge:
         jid = payload.get("chat_id") or ""
         if self.cfg.newsletter_jids and jid not in self.cfg.newsletter_jids:
             return {"ok": True, "ignored": "channel_not_monitored"}
-        fields = {
-            "name": subject_for(payload),
-            "channelJid": jid,
-            "channelName": _first(payload, "chat_name", "channel_name", default="") or "",
-            "messageId": message_id,
-            "body": payload.get("body") or "",
-            "mediaType": media_type_for(payload),
-            "postedAt": to_espo_datetime(payload.get("timestamp")),
-            "status": "New",
-        }
         server_id = _first(payload, "server_id", "serverId")
-        if isinstance(server_id, (int, str)) and str(server_id).isdigit():
-            fields["serverId"] = int(server_id)
         try:
-            record = self.espo.create_channel_post(fields)
+            post = self.crm.create_channel_post({
+                "channel_jid": jid,
+                "title": subject_for(payload),
+                "body": payload.get("body") or "",
+                "status": "published",
+                "media_type": media_type_for(payload),
+                "created_by": "whatsapp",
+            })
+            self.crm.update_channel_post(post["id"], {
+                "message_id": message_id,
+                "published_at": to_epoch(payload.get("timestamp")) or int(time.time()),
+                "server_id": int(server_id) if isinstance(server_id, (int, str)) and str(server_id).isdigit() else None,
+                "views": int(_first(payload, "views_count", "views", default=0) or 0),
+            })
             self.store.mark_seen(message_id)
             self.stats["channel_posts"] += 1
             log.info("channel post stored: %s (%s)", message_id, jid)
-            return {"ok": True, "postId": record.get("id")}
-        except EspoError as exc:
+            return {"ok": True, "postId": post["id"]}
+        except Exception as exc:  # noqa: BLE001
             self.stats["errors"] += 1
             log.error("channel post store failed: %s", exc)
             return {"ok": False, "error": str(exc)[:200]}
@@ -221,71 +223,32 @@ class Bridge:
         message_id = _first(payload, "message_id", "messageId", "id")
         if not message_id:
             return {"ok": True, "ignored": "no_message_id"}
-        updates = {}
-        mapping = {
-            "viewsCount": ("views_count", "viewsCount", "views"),
-            "forwardsCount": ("forwards_count", "forwardsCount", "forwards"),
-            "reactionsCount": ("reactions_count", "reactionsCount", "reactions"),
-        }
-        for field, keys in mapping.items():
-            value = _first(payload, *keys)
-            if isinstance(value, dict):
-                value = sum(v for v in value.values() if isinstance(v, (int, float)))
-            if isinstance(value, (int, float)):
-                updates[field] = int(value)
-        if not updates:
+        views = _first(payload, "views_count", "viewsCount", "views")
+        forwards = _first(payload, "forwards_count", "forwardsCount", "forwards")
+        reactions = _first(payload, "reaction_counts", "reactions", "reactionsCount")
+        if isinstance(reactions, dict):
+            reactions = sum(v for v in reactions.values() if isinstance(v, (int, float)))
+        if not any(isinstance(v, (int, float)) for v in (views, forwards, reactions)):
             return {"ok": True, "ignored": "no_counters"}
-        try:
-            record = self.espo.find_channel_post_by_message(str(message_id))
-            if not record:
-                return {"ok": True, "ignored": "post_not_found"}
-            self.espo.update_channel_post(record["id"], updates)
-            log.info("counters updated for %s: %s", message_id, updates)
-            return {"ok": True, "updated": updates}
-        except EspoError as exc:
-            self.stats["errors"] += 1
-            log.error("counter update failed: %s", exc)
-            return {"ok": False, "error": str(exc)[:200]}
-
-    # -- inbound: EspoCRM --------------------------------------------------
-    def handle_espocrm_hook(self, body: dict) -> dict:
-        entity_type = body.get("entityType") or body.get("entity_type") or "WhatsAppChannelPost"
-        entity_id = body.get("entityId") or body.get("entity_id") or body.get("id")
-        if not entity_id:
-            return {"ok": False, "error": "entityId required"}
-        if entity_type == "WhatsAppChannelPost":
-            queued = self.store.enqueue("publish", entity_id, {"postId": entity_id})
-            self.drain_outbox()
-            return {"ok": True, "queued": queued, "postId": entity_id}
-        if entity_type in ("Contact", "Lead"):
-            message = body.get("message")
-            if not message:
-                return {"ok": False, "error": "message required for direct send"}
-            try:
-                record = self.espo._call("GET", f"/{entity_type}/{entity_id}")
-                phone = record.get("phoneNumber")
-                if not phone:
-                    return {"ok": False, "error": "record has no phoneNumber"}
-                self.gowa.send_message(phone, message)
-                self.espo.add_stream_note(entity_type, entity_id, f"WhatsApp sent: {message}"[:1500])
-                return {"ok": True, "sentTo": phone}
-            except (EspoError, GowaError) as exc:
-                return {"ok": False, "error": str(exc)[:200]}
-        return {"ok": False, "error": f"unsupported entityType {entity_type}"}
+        record = self.crm.find_channel_post_by_message(str(message_id))
+        if not record:
+            return {"ok": True, "ignored": "post_not_found"}
+        self.crm.update_counters(record["id"],
+                                 int(views) if isinstance(views, (int, float)) else None,
+                                 int(forwards) if isinstance(forwards, (int, float)) else None,
+                                 int(reactions) if isinstance(reactions, (int, float)) else None)
+        log.info("counters updated for %s", message_id)
+        return {"ok": True, "postId": record["id"]}
 
     # -- outbound publishing ----------------------------------------------
     def sync_ready_posts(self) -> int:
-        try:
-            records = self.espo.list_ready_to_publish()
-        except EspoError as exc:
-            log.error("cannot list ready posts: %s", exc)
-            return 0
+        due = self.crm.due_posts(limit=10)
         queued = 0
-        for record in records:
+        for record in due:
             if self.store.enqueue("publish", record["id"], {"postId": record["id"]}):
                 queued += 1
         if queued:
-            log.info("queued %d ready post(s)", queued)
+            log.info("queued %d due post(s)", queued)
             self.drain_outbox()
         return queued
 
@@ -307,40 +270,35 @@ class Bridge:
                 else:
                     self.store.finish(item["id"], error=str(exc)[:500],
                                       retry_in=BACKOFF_STEP * (attempts + 1))
+                    if payload.get("postId"):
+                        self.crm.release_post(payload["postId"])
                     log.warning("publish retry %d for %s: %s", attempts + 1,
                                 payload.get("postId"), exc)
         return processed
 
     def _publish(self, post_id: str) -> None:
-        record = self.espo.get_channel_post(post_id)
-        status = record.get("status")
-        if status != "Ready to Publish":
-            log.info("skip %s: status=%s", post_id, status)
+        record = self.crm.get_channel_post(post_id)
+        if not record:
+            raise ValueError(f"post {post_id} not found")
+        if not self.crm.claim_post(post_id):
+            log.info("skip %s: status=%s", post_id, record.get("status"))
             return
-        jid = record.get("channelJid")
+        jid = record.get("channel_jid")
         if not jid:
-            raise ValueError("record has no channelJid")
-        text = (record.get("body") or "").strip() or (record.get("name") or "").strip()
+            self.crm.mark_failed(post_id, "post has no channel_jid")
+            raise ValueError("post has no channel_jid")
+        text = (record.get("body") or "").strip() or (record.get("title") or "").strip()
         if not text:
-            raise ValueError("record has no body/name to publish")
-        media_url = (record.get("mediaUrl") or "").strip()
-        if media_url:
-            text = f"{text}\n{media_url}"
+            self.crm.mark_failed(post_id, "post has no text")
+            raise ValueError("post has no body/title to publish")
         response = self.gowa.send_message(jid, text)
         results = response.get("results") if isinstance(response.get("results"), dict) else {}
-        fields = {
-            "status": "Published",
-            "publishedAt": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-            "lastError": None,
-        }
         message_id = results.get("message_id") or results.get("id")
         if message_id:
-            # Needed to map channel counters (views/forwards/reactions) back.
-            fields["messageId"] = message_id
-            # Our own posts also come back through the channel feed; mark them
-            # seen so the backfill does not create a duplicate CRM record.
+            # Our own post returns through the channel feed; mark it seen so the
+            # archive sync does not create a duplicate record.
             self.store.mark_seen(message_id)
-        self.espo.update_channel_post(post_id, fields)
+        self.crm.mark_published(post_id, message_id)
         self.stats["published"] += 1
         log.info("published %s to %s", post_id, jid)
 
@@ -348,12 +306,9 @@ class Bridge:
         if not post_id:
             return
         try:
-            self.espo.update_channel_post(post_id, {
-                "status": "Failed",
-                "lastError": str(exc)[:1000],
-            })
-        except EspoError:
-            log.exception("could not flag post %s as Failed", post_id)
+            self.crm.mark_failed(post_id, str(exc))
+        except Exception:  # noqa: BLE001
+            log.exception("could not flag post %s as failed", post_id)
 
     # -- channel monitoring ------------------------------------------------
     def sync_channels(self) -> int:
@@ -386,7 +341,6 @@ class Bridge:
 
     @staticmethod
     def _normalize_channel_message(item: dict, jid: str) -> dict:
-        """Map GOWA's /newsletter/messages shape onto the webhook payload shape."""
         return {
             "id": _first(item, "message_id", "id"),
             "chat_id": jid,
@@ -394,17 +348,12 @@ class Bridge:
             "media_type": _first(item, "media_type", "type", default="none"),
             "timestamp": _first(item, "timestamp", "time", "posted_at"),
             "server_id": _first(item, "server_id", "serverId"),
+            "views_count": _first(item, "views_count", "views", default=0),
             "chat_name": _first(item, "channel_name", "newsletter_name", default=""),
         }
 
     # -- engagement counters ----------------------------------------------
     def sync_counters(self) -> int:
-        """Refresh views/forwards/reactions on CRM records from the channel.
-
-        GOWA exposes two shapes: /newsletter/messages carries message_id +
-        views_count (but no reactions), while /newsletter/message-updates
-        carries reaction_counts keyed by server_id. Join them on server_id.
-        """
         updated = 0
         for jid in self.cfg.newsletter_jids:
             try:
@@ -414,8 +363,6 @@ class Bridge:
                 continue
             feed = (feed_response.get("results") or {}).get("data") or []
             server_ids = [i.get("server_id") for i in feed if isinstance(i.get("server_id"), int)]
-            # A wide range (after=1) makes WhatsApp scan everything and time out
-            # with 504; asking only for the ids we just saw is fast.
             after = max(1, min(server_ids) - 1) if server_ids else 1
             try:
                 updates_response = self.gowa.newsletter_message_updates(jid, after=after, count=20)
@@ -430,36 +377,33 @@ class Bridge:
                 message_id = item.get("message_id")
                 if not message_id:
                     continue
-                record = self.espo.find_channel_post_by_message(message_id)
+                record = self.crm.find_channel_post_by_message(message_id)
                 if not record:
                     continue
                 server_id = item.get("server_id")
                 counter = counters.get(server_id) or item
-                fields = {}
-                if server_id and record.get("serverId") != server_id:
-                    fields["serverId"] = server_id
-                for field, key in (("viewsCount", "views_count"),
-                                   ("forwardsCount", "forwards_count")):
-                    value = counter.get(key, item.get(key))
-                    if isinstance(value, (int, float)) and int(value) != int(record.get(field) or 0):
-                        fields[field] = int(value)
+                views = counter.get("views_count", item.get("views_count"))
+                forwards = counter.get("forwards_count", item.get("forwards_count"))
                 reactions = counter.get("reaction_counts", item.get("reactions"))
-                total = None
                 if isinstance(reactions, dict):
-                    total = sum(v for v in reactions.values() if isinstance(v, (int, float)))
-                elif isinstance(reactions, list):
-                    total = len(reactions)
-                elif isinstance(reactions, (int, float)):
-                    total = int(reactions)
-                if total is not None and total != int(record.get("reactionsCount") or 0):
-                    fields["reactionsCount"] = int(total)
-                if fields:
-                    try:
-                        self.espo.update_channel_post(record["id"], fields)
-                        updated += 1
-                        log.info("counters updated for %s: %s", message_id, fields)
-                    except EspoError as exc:
-                        log.warning("counter update failed for %s: %s", message_id, exc)
+                    reactions = sum(v for v in reactions.values() if isinstance(v, (int, float)))
+                changed = (
+                    (isinstance(views, (int, float)) and int(views) != int(record.get("views") or 0)) or
+                    (isinstance(forwards, (int, float)) and int(forwards) != int(record.get("forwards") or 0)) or
+                    (isinstance(reactions, (int, float)) and int(reactions) != int(record.get("reactions") or 0)) or
+                    (server_id and int(server_id) != int(record.get("server_id") or 0))
+                )
+                if not changed:
+                    continue
+                self.crm.update_counters(
+                    record["id"],
+                    int(views) if isinstance(views, (int, float)) else None,
+                    int(forwards) if isinstance(forwards, (int, float)) else None,
+                    int(reactions) if isinstance(reactions, (int, float)) else None,
+                    int(server_id) if isinstance(server_id, int) else None,
+                )
+                updated += 1
+                log.info("counters updated for %s", message_id)
         return updated
 
     # -- diagnostics -------------------------------------------------------
@@ -470,10 +414,11 @@ class Bridge:
         except GowaError:
             gowa_ok = False
         return {
-            "ok": gowa_ok and bool(self.cfg.espo_api_key),
+            "ok": gowa_ok and self.crm.ping(),
             "gowa": gowa_ok,
-            "espocrm": self.espo.ping(),
+            "crm": self.crm.ping(),
             "queue": self.store.pending_count(),
             "stats": dict(self.stats),
+            "db": self.cfg.db_path,
             "monitoredChannels": list(self.cfg.newsletter_jids),
         }

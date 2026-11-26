@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import time
 
 SCHEMA = """
@@ -40,10 +41,18 @@ class Store:
     def __init__(self, path: str):
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         self.path = path
+        self.lock = threading.RLock()
         self._conn = sqlite3.connect(path, check_same_thread=False, timeout=15)
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
+        self._conn.execute("PRAGMA busy_timeout=10000")
         self._conn.executescript(SCHEMA)
         self._conn.commit()
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        return self._conn
 
     def close(self) -> None:
         self._conn.close()
