@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import base64
 import gzip
+from email.parser import BytesParser
+from email.policy import default as email_policy
 import hmac
 import json
 import logging
@@ -18,6 +20,7 @@ import os
 import re
 import sys
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -32,6 +35,7 @@ MAX_BODY = 1_048_576  # 1 MiB
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # Writable cache for generated assets (the code dir is mounted read-only).
 CACHE_DIR = os.environ.get("STATIC_CACHE", "/var/crm/static")
+MEDIA_DIR = os.environ.get("MEDIA_DIR", "/var/crm/media")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -68,6 +72,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Length", "0")
         self.end_headers()
+
+    def _parse_multipart(self, raw: bytes) -> tuple[dict, dict]:
+        ctype = self.headers.get("Content-Type") or ""
+        message = BytesParser(policy=email_policy).parsebytes(
+            b"Content-Type: " + ctype.encode() + b"\r\nMIME-Version: 1.0\r\n\r\n" + raw)
+        fields: dict[str, str] = {}
+        files: dict[str, tuple] = {}
+        for part in message.iter_parts():
+            raw_name = part.get_param("name", header="content-disposition")
+            name = raw_name if isinstance(raw_name, str) else None
+            if not name:
+                continue
+            payload = part.get_payload(decode=True) or b""
+            filename = part.get_filename()
+            if filename:
+                files[name] = (filename, payload, part.get_content_type())
+            else:
+                fields[name] = payload.decode("utf-8", "replace")
+        return fields, files
 
     def _read_body(self) -> bytes:
         try:
@@ -177,7 +200,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_html(200, ui.notifications_page(crm.notifications(60)))
         if path == "/ui/content":
             status = (query.get("status") or [""])[0]
-            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 30), status))
+            error = (query.get("error") or [""])[0]
+            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 30), status, error))
         if path == "/ui/contacts":
             q = (query.get("q") or [""])[0]
             return self._send_html(200, ui.contacts_page(crm.list_contacts(q or None)))
@@ -274,18 +298,101 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send(404, {"error": "not found"})
 
+    def _form(self, raw: bytes) -> tuple[dict, dict]:
+        ctype = self.headers.get("Content-Type") or ""
+        if ctype.startswith("multipart/form-data"):
+            return self._parse_multipart(raw)
+        return ui.parse_form(raw), {}
+
+    def _create_content(self, crm, raw: bytes):
+        fields, files = self._form(raw)
+        kind = (fields.get("type") or "text").strip().lower()
+        title = (fields.get("title") or "").strip()
+        body = (fields.get("body") or "").strip()
+        url = (fields.get("url") or "").strip()
+        at = ui.parse_local_datetime(fields.get("at") or "")
+        meta = None
+        media_path = None
+
+        if kind == "poll":
+            options = [line.strip() for line in (fields.get("options") or "").splitlines() if line.strip()]
+            if len(options) < 2:
+                return self._redirect("/ui/content?error=poll_options")
+            meta = json.dumps({"options": options}, ensure_ascii=False)
+            body = body or title
+        elif kind == "link":
+            if not url.lower().startswith(("http://", "https://")):
+                return self._redirect("/ui/content?error=link")
+            body = (body + "\n" + url).strip()
+        elif kind in ("image", "video", "audio", "file"):
+            upload = files.get("media")
+            if not upload or not upload[1]:
+                return self._redirect("/ui/content?error=media_required")
+            filename, payload, _mime = upload
+            if len(payload) > 20 * 1024 * 1024:
+                return self._redirect("/ui/content?error=media_too_big")
+            ext = os.path.splitext(filename or "")[1].lower()[:8]
+            os.makedirs(MEDIA_DIR, exist_ok=True)
+            media_path = os.path.join(MEDIA_DIR, uuid.uuid4().hex[:12] + ext)
+            with open(media_path, "wb") as fh:
+                fh.write(payload)
+        elif kind not in ("text",):
+            kind = "text"
+
+        post = crm.create_channel_post({
+            "channel_jid": (self.bridge.cfg.newsletter_jids or ("",))[0],
+            "title": title,
+            "body": body,
+            "status": "draft",
+            "media_type": kind,
+            "media_path": media_path,
+            "meta": meta,
+            "created_by": "human",
+        })
+        if at:
+            crm.schedule_post(post["id"], at, approved=True)
+        return self._redirect(f"/ui/post/{post['id']}")
+
+    def _edit_content(self, crm, raw: bytes):
+        fields, _ = self._form(raw)
+        post_id = fields.get("id")
+        if not post_id:
+            return self._redirect("/ui/content")
+        try:
+            crm.update_channel_post(post_id, {
+                "title": (fields.get("title") or "").strip() or None,
+                "body": (fields.get("body") or "").strip() or None,
+            }, allowed_statuses=("idea", "draft", "review", "scheduled"))
+            at = ui.parse_local_datetime(fields.get("at") or "")
+            if at:
+                crm.schedule_post(post_id, at, approved=True)
+        except (ValueError, PermissionError):
+            return self._redirect(f"/ui/post/{post_id}?error=not_editable")
+        return self._redirect(f"/ui/post/{post_id}")
+
+    def _delete_content(self, crm, raw: bytes):
+        fields, _ = self._form(raw)
+        post_id = fields.get("id")
+        if not post_id:
+            return self._redirect("/ui/content")
+        try:
+            crm.delete_post(post_id)
+            return self._redirect("/ui/content")
+        except (ValueError, PermissionError):
+            return self._redirect(f"/ui/post/{post_id}?error=published")
+
     def _ui_post(self, path: str, raw: bytes):
         crm = self.bridge.crm
-        form = ui.parse_form(raw)
+        if (self.headers.get("Content-Type") or "").startswith("multipart/form-data"):
+            form, _files = self._parse_multipart(raw)
+        else:
+            form = ui.parse_form(raw)
         if path == "/ui/content/new":
-            crm.create_channel_post({
-                "channel_jid": (self.bridge.cfg.newsletter_jids or ("",))[0],
-                "title": form.get("title") or "",
-                "body": form.get("body") or "",
-                "status": "draft",
-                "created_by": "human",
-            })
-            return self._redirect("/ui/content")
+            return self._create_content(crm, raw)
+        if path == "/ui/content/edit":
+            return self._edit_content(crm, raw)
+        if path == "/ui/content/delete":
+            return self._delete_content(crm, raw)
         if path == "/ui/content/schedule":
             at = ui.parse_local_datetime(form.get("at") or "")
             if form.get("id") and at:
@@ -319,6 +426,10 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/ui/notifications/read":
             self.bridge.crm.mark_notifications_read()
             return self._redirect("/ui/notifications")
+        if path == "/ui/channel/sync":
+            self.bridge.sync_channels(count=100)
+            self.bridge.sync_counters()
+            return self._redirect("/ui/channel")
         if path == "/ui/channel/refresh":
             self.bridge.refresh_channel_info()
             return self._redirect("/ui/channel")

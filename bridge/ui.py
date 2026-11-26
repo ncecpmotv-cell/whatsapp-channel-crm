@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import json
 from urllib.parse import parse_qs
 
 STAGES_AR = {
@@ -17,6 +18,10 @@ STAGES_AR = {
     "publishing": "جارٍ النشر",
     "published": "منشور",
     "failed": "فشل",
+}
+TYPE_AR = {
+    "text": "نص", "image": "صورة", "video": "فيديو", "audio": "صوت",
+    "file": "ملف", "link": "رابط", "poll": "استبيان", "none": "نص",
 }
 DEAL_STAGES_AR = {
     "new": "جديد",
@@ -263,54 +268,107 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
 
 
 # -------------------------------------------------------------------- content
-def content_page(posts: list[dict], status: str = "") -> bytes:
+TYPE_SCRIPT = """<script>
+const sel = document.getElementById('ctype');
+function syncType() {
+  const v = sel.value;
+  document.getElementById('mediaRow').hidden = !['image','video','audio','file'].includes(v);
+  document.getElementById('linkRow').hidden = v !== 'link';
+  document.getElementById('pollRow').hidden = v !== 'poll';
+}
+sel.addEventListener('change', syncType);
+syncType();
+</script>"""
+
+
+def content_page(posts: list[dict], status: str = "", error: str = "") -> bytes:
     filters = "".join(
         f'<a href="/ui/content?status={key}" class="badge {"" if status != key else "scheduled"}">'
         f'{esc(label)}</a> '
         for key, label in STAGES_AR.items()
     )
+    errors = {
+        "poll_options": "الاستبيان يحتاج سؤالًا وخيارين على الأقل (سطر لكل خيار).",
+        "link": "أدخل رابطًا يبدأ بـ http:// أو https://",
+        "media_required": "اختر ملفًا للنوع المحدد.",
+        "media_too_big": "الملف أكبر من 20 ميغابايت.",
+    }
+    banner = ""
+    if error:
+        banner = (f'<div class="card" style="border-color:var(--bad)">'
+                  f'<b style="color:var(--bad)">تعذّر الإنشاء</b>'
+                  f'<p class="muted">{esc(errors.get(error, error))}</p></div>')
+
     rows = []
     for p in posts:
         when = fmt_ts(p.get("scheduled_at") or p.get("published_at"))
+        kind = p.get("media_type") or "text"
         actions = ""
         if p["status"] in ("idea", "draft", "review"):
             actions = (
                 f'<form method="post" action="/ui/content/schedule">'
                 f'<input type="hidden" name="id" value="{esc(p["id"])}">'
-                f'<input type="datetime-local" name="at" required>'
+                f'<input type="datetime-local" name="at" required aria-label="موعد النشر">'
                 f'<button>جدولة</button></form>'
                 f'<form method="post" action="/ui/content/publish" '
                 f"onsubmit=\"return confirm('النشر إلى القناة لا يمكن التراجع عنه. أرسِل الآن؟')\">"
                 f'<input type="hidden" name="id" value="{esc(p["id"])}">'
                 f'<button class="ghost">نشر الآن</button></form>'
             )
+        delete = ""
+        if p["status"] != "published":
+            delete = (
+                f'<form method="post" action="/ui/content/delete" '
+                f"onsubmit=\"return confirm('حذف هذا العنصر نهائيًا؟')\">"
+                f'<input type="hidden" name="id" value="{esc(p["id"])}">'
+                f'<button class="ghost" style="border-color:var(--bad);color:var(--bad)">حذف</button></form>'
+            )
         rows.append(f"""
 <div class="card">
   <div class="row">
     <div class="stack">
       <b><a href="/ui/post/{esc(p["id"])}">{esc(p["title"] or (p["body"] or "")[:70])}</a></b>
-      <span class="muted">{when} · {esc(p.get("created_by"))} · 👁 {esc(p.get("views") or 0)} · ↪ {esc(p.get("forwards") or 0)}</span>
+      <span class="muted">{esc(TYPE_AR.get(kind, kind))} · {when} · {esc(p.get("created_by"))} · 👁 {esc(p.get("views") or 0)}</span>
     </div>
     {badge(p["status"])}
   </div>
-  <pre>{esc((p["body"] or "")[:220])}</pre>
+  <pre>{esc((p["body"] or "")[:200])}</pre>
   {"" if not p.get("last_error") else f'<p class="muted">خطأ: {esc(p["last_error"])}</p>'}
-  <div class="row">{actions}</div>
+  <div class="row" style="margin-top:6px">{actions}{delete}</div>
 </div>""")
+
     body = f"""
 <h1>المحتوى</h1>
+{banner}
 <p>{filters}</p>
-<form method="post" action="/ui/content/new">
-  <input name="title" placeholder="عنوان مختصر" style="flex:1 1 220px">
-  <textarea name="body" placeholder="نص المنشور" required></textarea>
-  <button>مسودة جديدة</button>
+<h2>محتوى جديد</h2>
+<form method="post" action="/ui/content/new" enctype="multipart/form-data" class="composer">
+  <label>النوع
+    <select name="type" id="ctype">
+      <option value="text">نص</option>
+      <option value="image">صورة</option>
+      <option value="video">فيديو</option>
+      <option value="audio">صوت</option>
+      <option value="file">ملف</option>
+      <option value="link">رابط</option>
+      <option value="poll">استبيان (غير مدعوم في القنوات)</option>
+    </select>
+  </label>
+  <label>عنوان <input name="title" placeholder="عنوان مختصر"></label>
+  <label>النص <textarea name="body" placeholder="نص المنشور"></textarea></label>
+  <label id="mediaRow" hidden>الملف <input type="file" name="media" accept="image/*,video/*,audio/*,application/pdf"></label>
+  <label id="linkRow" hidden>الرابط <input name="url" inputmode="url" placeholder="https://..."></label>
+  <label id="pollRow" hidden>خيارات الاستبيان <textarea name="options" placeholder="سطر لكل خيار"></textarea></label>
+  <label>موعد النشر (اختياري) <input type="datetime-local" name="at"></label>
+  <button>إنشاء</button>
 </form>
-{''.join(rows) or '<p class="muted">لا عناصر بعد — أنشئ أول مسودة من الحقل أعلاه.</p>'}
+<p class="muted">النشر النهائي قرار بشري: «نشر الآن» أو «جدولة». الاستبيانات لا تدعمها قنوات واتساب (خطأ 479) وتُرسل في المحادثات فقط.</p>
+<h2>العناصر</h2>
+{''.join(rows) or '<p class="muted">لا عناصر بعد — أنشئ أول مسودة من الأعلى.</p>'}
+{TYPE_SCRIPT}
 """
     return page("المحتوى", body, "content")
 
-
-# ------------------------------------------------------------------- contacts
 def contacts_page(contacts: list[dict]) -> bytes:
     rows = "".join(f"""
 <div class="card"><div class="row">
@@ -437,6 +495,35 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
     error = "" if not post.get("last_error") else (
         f'<div class="card" style="border-color:var(--bad)"><b style="color:var(--bad)">آخر خطأ</b>'
         f'<pre>{esc(post["last_error"])}</pre></div>')
+    kind = post.get("media_type") or "text"
+    poll_block = ""
+    if kind == "poll":
+        try:
+            options = json.loads(post.get("meta") or "{}").get("options") or []
+        except Exception:  # noqa: BLE001
+            options = []
+        poll_block = ('<div class="card"><b>خيارات الاستبيان</b><ul class="muted">'
+                      + "".join(f"<li>{esc(o)}</li>" for o in options) + "</ul>"
+                      '<p class="muted">قنوات واتساب لا تدعم الاستبيانات (خطأ 479).</p></div>')
+    delete_block = ""
+    edit_block = ""
+    if post["status"] != "published":
+        delete_block = (
+            f'<form method="post" action="/ui/content/delete" '
+            f"onsubmit=\"return confirm('حذف هذا العنصر نهائيًا؟')\">"
+            f'<input type="hidden" name="id" value="{esc(post["id"])}">'
+            f'<button class="ghost" style="border-color:var(--bad);color:var(--bad)">حذف</button></form>'
+        )
+        edit_block = f"""
+<h2>تعديل</h2>
+<form method="post" action="/ui/content/edit">
+  <input type="hidden" name="id" value="{esc(post["id"])}">
+  <label>العنوان <input name="title" value="{esc(post.get("title") or "")}"></label>
+  <label>النص <textarea name="body">{esc(post.get("body") or "")}</textarea></label>
+  <label>إعادة جدولة إلى <input type="datetime-local" name="at"></label>
+  <button>حفظ التعديل</button>
+</form>
+"""
     stats_rows = "".join(
         f'<tr><td>{esc(h["day"])}</td><td>{esc(h["views"])}</td><td>{esc(h["forwards"])}</td>'
         f'<td>{esc(h["reactions"])}</td></tr>'
@@ -445,7 +532,7 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
     body = f"""
 <p><a href="/ui/content" class="muted">← المحتوى</a></p>
 <h1>{esc(post["title"] or "بدون عنوان")}</h1>
-<div class="row"><div>{badge(post["status"])} <span class="muted">· {esc(post.get("created_by"))}</span></div>
+<div class="row"><div>{badge(post["status"])} <span class="muted">· {esc(TYPE_AR.get(post.get("media_type") or "text", "نص"))} · {esc(post.get("created_by"))}</span></div>
 <span class="muted">{esc(channel.get("name") if channel else post.get("channel_jid"))}</span></div>
 <div class="grid" style="margin-top:12px">
   <div class="stat"><b>{esc(views)}</b><span>مشاهدات</span></div>
@@ -468,7 +555,9 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
 <tr class="muted"><td>اليوم</td><td>مشاهدات</td><td>تمرير</td><td>تفاعل</td></tr>
 {stats_rows}
 </table></div>
-<div class="row">{actions}</div>
+{poll_block}
+<div class="row" style="margin-top:8px">{actions}{delete_block}</div>
+{edit_block}
 """
     return page(post["title"] or "منشور", body, "content")
 
@@ -497,7 +586,8 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 <h1>{esc(name)}</h1>
 <div class="row">
   <span class="muted">{esc((info or {}).get("jid") or "")}</span>
-  <form method="post" action="/ui/channel/refresh"><button>تحديث بيانات القناة</button></form>
+  <form method="post" action="/ui/channel/sync"><button>مزامنة أرشيف القناة</button></form>
+  <form method="post" action="/ui/channel/refresh"><button class="ghost">تحديث بيانات القناة</button></form>
 </div>
 <div class="grid">
   <div class="stat"><b>{esc(subs if subs is not None else "—")}</b><span>مشتركون</span></div>

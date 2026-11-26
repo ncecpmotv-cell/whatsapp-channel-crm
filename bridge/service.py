@@ -211,6 +211,9 @@ class Bridge:
             return {"ok": True, "ignored": "no_message_id"}
         if self.store.seen(message_id):
             return {"ok": True, "ignored": "duplicate"}
+        if self.crm.find_channel_post_by_message(str(message_id)):
+            self.store.mark_seen(message_id)
+            return {"ok": True, "ignored": "already_archived"}
         jid = payload.get("chat_id") or ""
         if self.cfg.newsletter_jids and jid not in self.cfg.newsletter_jids:
             return {"ok": True, "ignored": "channel_not_monitored"}
@@ -357,7 +360,7 @@ class Bridge:
             log.exception("could not flag post %s as failed", post_id)
 
     # -- channel monitoring ------------------------------------------------
-    def sync_channels(self) -> int:
+    def sync_channels(self, count: int = 20) -> int:
         """Pull the newest posts per channel so nothing is lost while offline."""
         stored = 0
         for jid in self.cfg.newsletter_jids:
@@ -366,7 +369,7 @@ class Bridge:
             except GowaError as exc:
                 log.warning("live-updates subscribe failed for %s: %s", jid, exc)
             try:
-                response = self.gowa.newsletter_messages(jid, count=20)
+                response = self.gowa.newsletter_messages(jid, count=max(1, min(count, 100)))
             except GowaError as exc:
                 log.warning("newsletter fetch failed for %s: %s", jid, exc)
                 continue
@@ -399,11 +402,11 @@ class Bridge:
         }
 
     # -- engagement counters ----------------------------------------------
-    def sync_counters(self) -> int:
+    def sync_counters(self, count: int = 100) -> int:
         updated = 0
         for jid in self.cfg.newsletter_jids:
             try:
-                feed_response = self.gowa.newsletter_messages(jid, count=20)
+                feed_response = self.gowa.newsletter_messages(jid, count=max(1, min(count, 100)))
             except GowaError as exc:
                 log.warning("counter fetch failed for %s: %s", jid, exc)
                 continue
@@ -411,7 +414,7 @@ class Bridge:
             server_ids = [i.get("server_id") for i in feed if isinstance(i.get("server_id"), int)]
             after = max(1, min(server_ids) - 1) if server_ids else 1
             try:
-                updates_response = self.gowa.newsletter_message_updates(jid, after=after, count=20)
+                updates_response = self.gowa.newsletter_message_updates(jid, after=after, count=100)
             except GowaError as exc:
                 log.warning("counter updates failed for %s: %s", jid, exc)
                 updates_response = {}

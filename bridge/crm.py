@@ -399,6 +399,20 @@ class CrmClient:
         self._exec(f"UPDATE crm_posts SET {', '.join(sets)} WHERE id = ?", tuple(params))
         return self.get_channel_post(post_id) or {}
 
+    DELETABLE = ("idea", "draft", "review", "scheduled", "publishing", "failed")
+
+    def delete_post(self, post_id: str) -> dict:
+        """Remove a post that has not been published. Cancels any queued send."""
+        post = self.get_channel_post(post_id)
+        if not post:
+            raise ValueError("المنشور غير موجود")
+        if post["status"] == "published":
+            raise PermissionError("لا يمكن حذف منشور منشور على القناة")
+        self._exec("DELETE FROM outbox WHERE ref = ? AND status IN ('pending','failed')", (post_id,))
+        self._exec("DELETE FROM crm_stats WHERE post_id = ?", (post_id,))
+        self._exec("DELETE FROM crm_posts WHERE id = ?", (post_id,))
+        return {"id": post_id, "deleted": True}
+
     def get_channel_post(self, post_id: str) -> dict | None:
         return self._one("SELECT * FROM crm_posts WHERE id = ?", (post_id,))
 
