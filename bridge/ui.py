@@ -89,6 +89,7 @@ main{padding-bottom:var(--sp-4)}
   gap:var(--sp-2);margin:var(--sp-2) 0}
 .stat{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-2);
   padding:var(--sp-3);display:flex;flex-direction:column;gap:2px;min-height:78px;justify-content:center}
+.stat.zero b{color:var(--ink-2)}
 .stat b{font-size:var(--fs-4);line-height:1.2;color:var(--accent);
   font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-weight:700}
 .stat span{font-size:var(--fs-1);color:var(--ink-2);line-height:1.4}
@@ -309,8 +310,12 @@ def badge(status: str) -> str:
 # ------------------------------------------------------------------ dashboard
 def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
               unread: int, metrics: dict) -> bytes:
+    def stat(k, v) -> str:
+        zero = " zero" if str(v) in ("0", "") else ""
+        return f'<div class="stat{zero}"><b>{esc(v)}</b><span>{esc(k)}</span></div>'
+
     cards = "".join(
-        f'<div class="stat"><b>{esc(v)}</b><span>{esc(k)}</span></div>'
+        stat(k, v)
         for k, v in [
             ("منشور", stats.get("published", 0)),
             ("مجدول", stats.get("scheduled", 0)),
@@ -340,10 +345,10 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
 <div class="grid">{cards}</div>
 <h2>أرقام القناة — {esc(total.get("posts", 0))} منشورًا</h2>
 <div class="grid">
-  <div class="stat"><b>{esc(total.get("views", 0))}</b><span>مشاهدات</span></div>
-  <div class="stat"><b>{esc(total.get("forwards", 0))}</b><span>إعادة تمرير</span></div>
-  <div class="stat"><b>{esc(total.get("reactions", 0))}</b><span>تفاعل</span></div>
-  <div class="stat"><b>{esc(unread)}</b><span>رسائل غير مقروءة</span></div>
+  {stat("مشاهدات", total.get("views", 0))}
+  {stat("إعادة تمرير", total.get("forwards", 0))}
+  {stat("تفاعل", total.get("reactions", 0))}
+  {stat("رسائل غير مقروءة", unread)}
 </div>
 <details class="panel"{' open' if scheduled else ''}>
   <summary>مجدول <span class="badge scheduled">{len(scheduled)}</span></summary>
