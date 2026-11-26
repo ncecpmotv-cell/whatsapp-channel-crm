@@ -56,7 +56,9 @@ CREATE TABLE IF NOT EXISTS crm_posts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS crm_posts_message_id ON crm_posts(message_id)
     WHERE message_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS crm_posts_status ON crm_posts(status, scheduled_at);
+CREATE INDEX IF NOT EXISTS crm_posts_board ON crm_posts(status, updated_at);
+CREATE INDEX IF NOT EXISTS crm_posts_status_order
+    ON crm_posts(status, COALESCE(scheduled_at, published_at, updated_at) DESC);
 CREATE TABLE IF NOT EXISTS crm_messages (
     id          TEXT PRIMARY KEY,
     contact_id  TEXT,
@@ -68,6 +70,9 @@ CREATE TABLE IF NOT EXISTS crm_messages (
     read        INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS crm_messages_contact ON crm_messages(contact_id, at DESC);
+CREATE INDEX IF NOT EXISTS crm_contacts_last ON crm_contacts(last_inbound DESC);
+CREATE INDEX IF NOT EXISTS crm_contacts_sort
+    ON crm_contacts(COALESCE(last_inbound, updated_at) DESC);
 CREATE TABLE IF NOT EXISTS crm_deals (
     id             TEXT PRIMARY KEY,
     contact_id     TEXT,
@@ -111,6 +116,7 @@ CREATE TABLE IF NOT EXISTS crm_notifications (
     dedupe_key TEXT UNIQUE
 );
 CREATE INDEX IF NOT EXISTS crm_notifications_unread ON crm_notifications(read, at DESC);
+CREATE INDEX IF NOT EXISTS crm_notifications_recent ON crm_notifications(at DESC);
 CREATE TABLE IF NOT EXISTS crm_chat (
     id      TEXT PRIMARY KEY,
     role    TEXT NOT NULL,
@@ -422,14 +428,16 @@ class CrmClient:
     def find_post_by_server_id(self, server_id: int) -> dict | None:
         return self._one("SELECT * FROM crm_posts WHERE server_id = ?", (server_id,))
 
-    def list_posts(self, status: str | None = None, limit: int = 100) -> list[dict]:
+    def list_posts(self, status: str | None = None, limit: int = 100,
+                   offset: int = 0) -> list[dict]:
         if status:
             return self._all(
                 "SELECT * FROM crm_posts WHERE status = ? ORDER BY "
-                "COALESCE(scheduled_at, published_at, updated_at) DESC LIMIT ?", (status, limit))
+                "COALESCE(scheduled_at, published_at, updated_at) DESC LIMIT ? OFFSET ?",
+                (status, limit, max(0, offset)))
         return self._all(
-            "SELECT * FROM crm_posts ORDER BY COALESCE(scheduled_at, published_at, updated_at) DESC LIMIT ?",
-            (limit,))
+            "SELECT * FROM crm_posts ORDER BY COALESCE(scheduled_at, published_at, updated_at) DESC "
+            "LIMIT ? OFFSET ?", (limit, max(0, offset)))
 
     def due_posts(self, limit: int = 10) -> list[dict]:
         return self._all(

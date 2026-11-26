@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
 from email.parser import BytesParser
 from email.policy import default as email_policy
 import hmac
@@ -46,11 +47,30 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- helpers -----------------------------------------------------------
     def _send_bytes(self, status: int, body: bytes, content_type: str,
-                    headers: dict | None = None) -> None:
+                    headers: dict | None = None, compress: bool = True,
+                    validators: bool = True) -> None:
+        extra = dict(headers or {})
+        etag = None
+        if validators and status == 200 and self.command == "GET" and body:
+            etag = '"' + hashlib.sha1(body).hexdigest()[:16] + '"'
+            extra.setdefault("ETag", etag)
+            extra.setdefault("Cache-Control", "no-cache")
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(304)
+                for key, value in extra.items():
+                    self.send_header(key, value)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+        accepts_gzip = "gzip" in (self.headers.get("Accept-Encoding") or "")
+        if compress and accepts_gzip and len(body) >= 1024 and "Content-Encoding" not in extra:
+            body = gzip.compress(body, 6)
+            extra["Content-Encoding"] = "gzip"
+            extra.setdefault("Vary", "Accept-Encoding")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        for key, value in (headers or {}).items():
+        for key, value in extra.items():
             self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
@@ -157,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
         else:
             with open(path, "rb") as fh:
                 data = fh.read()
-        return self._send_bytes(200, data, ctype, headers)
+        return self._send_bytes(200, data, ctype, headers, compress=False, validators=False)
 
     # -- GET ---------------------------------------------------------------
     def do_GET(self):
@@ -176,6 +196,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(405, {"error": "use POST /mcp"}, {"Allow": "POST"})
         if path == "/":
             return self._redirect("/ui")
+        if path == "/favicon.ico":
+            self.send_response(204)
+            self.send_header("Cache-Control", "public, max-age=604800, immutable")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if path.startswith("/static/"):
             return self._static(path[len("/static/"):])
 
@@ -201,7 +227,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/ui/content":
             status = (query.get("status") or [""])[0]
             error = (query.get("error") or [""])[0]
-            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 30), status, error))
+            try:
+                page = max(1, int((query.get("page") or ["1"])[0]))
+            except ValueError:
+                page = 1
+            per_page = 15
+            rows = crm.list_posts(status or None, per_page + 1, (page - 1) * per_page)
+            has_next = len(rows) > per_page
+            return self._send_html(200, ui.content_page(rows[:per_page], status, error, page, has_next))
         if path == "/ui/contacts":
             q = (query.get("q") or [""])[0]
             return self._send_html(200, ui.contacts_page(crm.list_contacts(q or None)))

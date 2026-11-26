@@ -211,6 +211,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <title>{esc(title)} · CRM</title>
 <meta name="theme-color" content="#0f1512">
 <link rel="manifest" href="/ui/manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1512'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23c5a059' stroke-width='2.5'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/pico.min.css">
 <link rel="stylesheet" href="/static/app.css"></head>
 <body dir="rtl"><header class="top"><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
@@ -281,7 +282,9 @@ syncType();
 </script>"""
 
 
-def content_page(posts: list[dict], status: str = "", error: str = "") -> bytes:
+def content_page(posts: list[dict], status: str = "", error: str = "",
+                 page_no: int = 1, has_next: bool = False) -> bytes:
+    query = f"status={status}&" if status else ""
     filters = "".join(
         f'<a href="/ui/content?status={key}" class="badge {"" if status != key else "scheduled"}">'
         f'{esc(label)}</a> '
@@ -337,6 +340,12 @@ def content_page(posts: list[dict], status: str = "", error: str = "") -> bytes:
   <div class="row" style="margin-top:6px">{actions}{delete}</div>
 </div>""")
 
+    prev_link = (f'<a role="button" class="ghost" href="/ui/content?{query}page={page_no - 1}">السابق</a>'
+                 if page_no > 1 else "")
+    next_link = (f'<a role="button" class="ghost" href="/ui/content?{query}page={page_no + 1}">التالي</a>'
+                 if has_next else "")
+    pager = f'<div class="row" style="margin:10px 0">{prev_link}{next_link}</div>' if (prev_link or next_link) else ""
+
     body = f"""
 <h1>المحتوى</h1>
 {banner}
@@ -363,8 +372,9 @@ def content_page(posts: list[dict], status: str = "", error: str = "") -> bytes:
   <button>إنشاء</button>
 </form>
 <p class="muted">النشر النهائي قرار بشري: «نشر الآن» أو «جدولة». الاستبيانات لا تدعمها قنوات واتساب (خطأ 479) وتُرسل في المحادثات فقط.</p>
-<h2>العناصر</h2>
+<h2>العناصر <span class="muted">— صفحة {page_no}</span></h2>
 {''.join(rows) or '<p class="muted">لا عناصر بعد — أنشئ أول مسودة من الأعلى.</p>'}
+{pager}
 {TYPE_SCRIPT}
 """
     return page("المحتوى", body, "content")
