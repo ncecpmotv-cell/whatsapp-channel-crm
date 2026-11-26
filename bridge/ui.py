@@ -68,6 +68,29 @@ button.ghost{background:transparent;border-color:var(--line)}
 .chart .bar{flex:1;background:#0d1411;border-radius:4px;display:flex;align-items:flex-end;min-width:6px}
 .chart .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--gold),var(--sage));border-radius:4px}
 table td{padding:6px 4px;border-bottom:1px solid var(--line);font-size:13px}
+.bell{font-size:18px;padding:6px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card)}
+.bell.hot{border-color:var(--gold);color:var(--gold);font-weight:700}
+.notif{display:flex;gap:10px;align-items:flex-start}
+.notif .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:6px;flex:0 0 8px}
+.notif.read{opacity:.55}
+@media (max-width:640px){
+  header{padding:10px 12px;gap:8px}
+  header .brand{font-size:13px}
+  nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-around;
+      background:#0b110e;border-top:1px solid var(--line);padding:6px 4px;
+      padding-bottom:calc(6px + env(safe-area-inset-bottom));z-index:20}
+  nav a{flex:1;text-align:center;font-size:11px;padding:8px 2px;border:none;background:transparent}
+  nav a.on{background:transparent;color:var(--gold);font-weight:700}
+  main{padding:12px 12px calc(86px + env(safe-area-inset-bottom))}
+  h1{font-size:18px}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .stat b{font-size:19px}
+  button,input,select{min-height:44px}
+  button{width:100%}
+  form{flex-direction:column;align-items:stretch}
+  .row{flex-direction:column;align-items:stretch}
+  pre{font-size:13px}
+}
 """
 
 
@@ -75,10 +98,22 @@ def esc(value) -> str:
     return html.escape(str(value if value is not None else ""))
 
 
+TZ_OFFSET = 3  # hours; app.py sets this from config at startup
+
+
 def fmt_ts(ts) -> str:
     if not ts:
         return "—"
-    return dt.datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M")
+    local = dt.datetime.utcfromtimestamp(int(ts)) + dt.timedelta(hours=TZ_OFFSET)
+    return local.strftime("%Y-%m-%d %H:%M")
+
+
+_UNREAD = 0
+
+
+def set_unread(count: int) -> None:
+    global _UNREAD
+    _UNREAD = max(0, int(count or 0))
 
 
 def page(title: str, body: str, active: str = "") -> bytes:
@@ -93,6 +128,8 @@ def page(title: str, body: str, active: str = "") -> bytes:
         f'<a href="{href}" class="{"on" if key == active else ""}">{label}</a>'
         for href, label, key in nav
     )
+    bell = (f'<a class="bell{" hot" if _UNREAD else ""}" href="/ui/notifications" '
+            f'aria-label="الإشعارات">🔔{_UNREAD if _UNREAD else ""}</a>')
     doc = f"""<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -100,7 +137,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <meta name="theme-color" content="#0f1512">
 <link rel="manifest" href="/ui/manifest.webmanifest">
 <style>{CSS}</style></head>
-<body><header><span class="brand">CRM · قناة واتساب</span><nav>{links}</nav></header>
+<body><header><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
 <main>{body}</main></body></html>"""
     return doc.encode("utf-8")
 
@@ -284,16 +321,17 @@ def parse_form(raw: bytes) -> dict:
 
 
 def parse_local_datetime(value: str) -> int | None:
-    """`datetime-local` input (no timezone) is interpreted as local time."""
+    """`datetime-local` input is wall-clock time in the owner's timezone (UTC+3)."""
     if not value:
         return None
     try:
         parsed = dt.datetime.fromisoformat(value)
     except ValueError:
         return None
-    if parsed.tzinfo is None:
-        parsed = parsed.astimezone()
-    return int(parsed.timestamp())
+    if parsed.tzinfo is not None:
+        return int(parsed.timestamp())
+    utc_naive = parsed - dt.timedelta(hours=TZ_OFFSET)
+    return int(utc_naive.replace(tzinfo=dt.timezone.utc).timestamp())
 
 
 # ---------------------------------------------------------------- post detail
@@ -407,3 +445,26 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 """
     return page("القناة", body, "channel")
 
+
+
+
+# ----------------------------------------------------------------- notifications
+def notifications_page(items: list[dict]) -> bytes:
+    cards = []
+    for n in items:
+        classes = "card notif" + ("" if not n["read"] else " read")
+        dot = "" if n["read"] else '<span class="dot"></span>'
+        body = f'<span class="muted">{esc(n["body"])}</span>' if n.get("body") else ""
+        link = f'<a class="muted" href="{esc(n["link"])}">فتح ←</a>' if n.get("link") else ""
+        cards.append(
+            f'<div class="{classes}">{dot}<div class="stack" style="flex:1">'
+            f'<b>{esc(n["title"])}</b>{body}'
+            f'<span class="muted">{fmt_ts(n["at"])}</span>{link}</div></div>'
+        )
+    rows = "".join(cards) or '<p class="muted">لا إشعارات بعد.</p>'
+    body_html = f"""
+<h1>الإشعارات</h1>
+<form method="post" action="/ui/notifications/read"><button class="ghost">تحديد الكل كمقروء</button></form>
+{rows}
+"""
+    return page("الإشعارات", body_html, "")

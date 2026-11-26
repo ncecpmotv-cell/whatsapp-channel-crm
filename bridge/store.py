@@ -71,8 +71,25 @@ class Store:
 
     # -- outbox ------------------------------------------------------------
     def enqueue(self, kind: str, ref: str, payload: dict, delay: float = 0) -> bool:
-        """Queue work unless an identical pending item already exists."""
-        try:
+        """Queue work once per (kind, ref).
+
+        A post that is pending, in flight or already done must never be queued
+        again (that is how a post gets published twice). A previously failed
+        row is revived instead of duplicated.
+        """
+        with self.lock:
+            cur = self._conn.execute(
+                "SELECT id, status FROM outbox WHERE kind = ? AND ref = ? "
+                "ORDER BY id DESC LIMIT 1", (kind, ref))
+            row = cur.fetchone()
+            if row is not None:
+                if row["status"] == "failed":
+                    self._conn.execute(
+                        "UPDATE outbox SET status='pending', attempts=0, last_error=NULL, "
+                        "next_attempt=? WHERE id=?", (time.time() + delay, row["id"]))
+                    self._conn.commit()
+                    return True
+                return False
             self._conn.execute(
                 "INSERT INTO outbox(kind, ref, payload, next_attempt, created_at) "
                 "VALUES (?, ?, ?, ?, ?)",
@@ -80,8 +97,6 @@ class Store:
             )
             self._conn.commit()
             return True
-        except sqlite3.IntegrityError:
-            return False
 
     def due(self, limit: int = 10):
         cur = self._conn.execute(

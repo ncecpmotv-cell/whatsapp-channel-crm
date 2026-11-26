@@ -136,12 +136,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _ui_get(self, path: str, query: dict):
         crm = self.bridge.crm
+        ui.TZ_OFFSET = self.bridge.cfg.tz_offset
+        ui.set_unread(crm.unread_notifications())
         if path in ("/ui", "/ui/"):
             scheduled = crm.list_posts("scheduled", 10) + crm.list_posts("review", 10)
             scheduled.sort(key=lambda p: p.get("scheduled_at") or 0)
             return self._send_html(200, ui.dashboard(
                 stats=crm.stats(), scheduled=scheduled, followups=crm.followups(0),
                 unread=crm.unread_count(), metrics=crm.channel_metrics(7)))
+        if path == "/ui/notifications":
+            return self._send_html(200, ui.notifications_page(crm.notifications(60)))
         if path == "/ui/content":
             status = (query.get("status") or [""])[0]
             return self._send_html(200, ui.content_page(crm.list_posts(status or None, 100), status))
@@ -283,6 +287,9 @@ class Handler(BaseHTTPRequestHandler):
                 crm.upsert_deal(form["title"], contact_id=contact_id, value=value,
                                 stage=form.get("stage"))
             return self._redirect("/ui/deals")
+        if path == "/ui/notifications/read":
+            self.bridge.crm.mark_notifications_read()
+            return self._redirect("/ui/notifications")
         if path == "/ui/channel/refresh":
             self.bridge.refresh_channel_info()
             return self._redirect("/ui/channel")

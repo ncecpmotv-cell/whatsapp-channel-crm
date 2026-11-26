@@ -115,10 +115,21 @@ class Bridge:
                 log.exception("outbox loop error")
             self._stop.wait(10)
 
+    def sweep_followups(self) -> int:
+        """Notify once per due follow-up (dedupe key makes it idempotent)."""
+        count = 0
+        for item in self.crm.followups(0):
+            if self.crm.notify("followup", "متابعة مستحقة",
+                               item.get("body") or "متابعة", "/ui",
+                               dedupe_key=f"followup:{item['id']}"):
+                count += 1
+        return count
+
     def _poll_loop(self) -> None:
         while not self._stop.is_set():
             try:
                 self.sync_ready_posts()
+                self.sweep_followups()
             except Exception:
                 log.exception("poller error")
             self._stop.wait(self.cfg.poll_interval)
@@ -182,6 +193,9 @@ class Bridge:
             text = body if body else f"[{media}]"
             self.crm.add_message(contact["id"], "in", text, message_id=message_id,
                                  media_type=media, at=to_epoch(payload.get("timestamp")))
+            hour = time.strftime("%Y%m%d%H")
+            self.crm.notify("message", f"رسالة من {contact.get('name') or phone}",
+                            text[:160], "/ui/contacts", dedupe_key=f"msg:{contact['id']}:{hour}")
             if message_id:
                 self.store.mark_seen(message_id)
             self.stats["dms"] += 1
@@ -327,6 +341,9 @@ class Bridge:
             self.store.mark_seen(message_id)
         self.crm.mark_published(post_id, message_id)
         self.stats["published"] += 1
+        title = (record.get("title") or (record.get("body") or "")[:60]).strip()
+        self.crm.notify("published", f"نُشر: {title}", f"إلى {jid}", f"/ui/post/{post_id}",
+                        dedupe_key=f"published:{post_id}")
         log.info("published %s to %s", post_id, jid)
 
     def _mark_failed(self, post_id: str | None, exc: Exception) -> None:
@@ -334,6 +351,8 @@ class Bridge:
             return
         try:
             self.crm.mark_failed(post_id, str(exc))
+            self.crm.notify("publish_failed", "فشل النشر", str(exc)[:200], f"/ui/post/{post_id}",
+                            dedupe_key=f"failed:{post_id}")
         except Exception:  # noqa: BLE001
             log.exception("could not flag post %s as failed", post_id)
 

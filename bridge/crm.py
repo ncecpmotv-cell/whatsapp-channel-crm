@@ -100,6 +100,17 @@ CREATE TABLE IF NOT EXISTS crm_stats (
     captured_at INTEGER NOT NULL,
     PRIMARY KEY (post_id, day)
 );
+CREATE TABLE IF NOT EXISTS crm_notifications (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    body       TEXT,
+    link       TEXT,
+    at         INTEGER NOT NULL,
+    read       INTEGER NOT NULL DEFAULT 0,
+    dedupe_key TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS crm_notifications_unread ON crm_notifications(read, at DESC);
 CREATE TABLE IF NOT EXISTS crm_chat (
     id      TEXT PRIMARY KEY,
     role    TEXT NOT NULL,
@@ -539,6 +550,28 @@ class CrmClient:
             "FROM crm_stats WHERE day >= date('now', ?) GROUP BY day ORDER BY day ASC",
             (f"-{max(1, days)} day",))
         return rows
+
+    # -- notifications ------------------------------------------------------
+    def notify(self, kind: str, title: str, body: str = "", link: str = "",
+               dedupe_key: str | None = None) -> bool:
+        try:
+            self._exec(
+                "INSERT INTO crm_notifications (id, kind, title, body, link, at, dedupe_key) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (uuid.uuid4().hex[:12], kind, title, body, link, _now(), dedupe_key))
+            return True
+        except Exception:  # duplicate dedupe_key
+            return False
+
+    def notifications(self, limit: int = 50) -> list[dict]:
+        return self._all("SELECT * FROM crm_notifications ORDER BY at DESC LIMIT ?", (limit,))
+
+    def unread_notifications(self) -> int:
+        row = self._one("SELECT COUNT(*) AS n FROM crm_notifications WHERE read = 0")
+        return int(row["n"]) if row else 0
+
+    def mark_notifications_read(self) -> None:
+        self._exec("UPDATE crm_notifications SET read = 1 WHERE read = 0")
 
     # -- chat transcript ----------------------------------------------------
     def add_chat(self, role: str, content: str) -> dict:

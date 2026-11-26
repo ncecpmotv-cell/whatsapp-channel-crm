@@ -45,6 +45,7 @@ class Config:
     daily_publish_cap: int
     gowa_user: str = ""
     gowa_password: str = ""
+    tz_offset: int = 3  # Asia/Riyadh; container clocks are UTC
 
     @classmethod
     def load(cls, path: str | None = None) -> "Config":
@@ -90,6 +91,7 @@ class Config:
             daily_publish_cap=get_int("DAILY_PUBLISH_CAP", 30),
             gowa_user=get("GOWA_USER"),
             gowa_password=get("GOWA_PASSWORD"),
+            tz_offset=get_int("APP_TZ_OFFSET", 3),
         )
         cfg.validate()
         return cfg
@@ -111,4 +113,5 @@ _KNOWN_KEYS = {
     "BRIDGE_TOKEN", "NEWSLETTER_JIDS", "DEFAULT_COUNTRY_CODE", "CRM_DB_PATH",
     "BRIDGE_POLL_INTERVAL", "BRIDGE_CHANNEL_SYNC_INTERVAL", "BRIDGE_LOG_LEVEL",
     "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP", "GOWA_USER", "GOWA_PASSWORD",
+    "APP_TZ_OFFSET",
 }
