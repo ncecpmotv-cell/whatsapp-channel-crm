@@ -40,7 +40,9 @@ CSS = """
   --pico-h1-color:#eef3ee; --pico-h2-color:#c5a059; --pico-h3-color:#eef3ee;
   --pico-spacing: .8rem; --pico-border-radius: 12px;
 }
-body{background:#0f1512}
+body{background:#0f1512;font-size:1.0625rem}  /* 17px: HIG mobile default for body text */
+:focus-visible{outline:2px solid #c5a059;outline-offset:2px;border-radius:8px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 header.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;
   border-bottom:1px solid var(--pico-border-color);background:#0b110e;position:sticky;top:0;z-index:30}
 header.top .brand{font-weight:700;color:#c5a059;margin-inline-end:auto;font-size:15px}
@@ -48,7 +50,8 @@ header.top nav{display:flex;gap:6px;flex-wrap:wrap}
 header.top nav a{padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);
   background:#18211c;font-size:13px;text-decoration:none}
 header.top nav a.on{background:#3e4d42;border-color:#c5a059;color:#fff}
-.bell{font-size:18px;padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);background:#18211c}
+.bell{font-size:18px;padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);
+  background:#18211c;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}
 .bell.hot{border-color:#c5a059;color:#c5a059;font-weight:700}
 main{padding-bottom:24px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
@@ -60,7 +63,7 @@ main{padding-bottom:24px}
 .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
   border:1px solid #2a3a31;color:#9db0a3}
 .badge.published{color:#4caf7d;border-color:#4caf7d}
-.badge.failed{color:#c85c5c;border-color:#c85c5c}
+.badge.failed{color:#d97474;border-color:#d97474}
 .badge.scheduled{color:#d9a04a;border-color:#d9a04a}
 .badge.review{color:#c5a059;border-color:#c5a059}
 .muted{color:#9db0a3;font-size:12px}
@@ -78,7 +81,8 @@ table td{padding:6px 4px;border-bottom:1px solid #2a3a31;font-size:13px}
   header.top nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-around;
     background:#0b110e;border-top:1px solid #2a3a31;padding:6px 4px;
     padding-bottom:calc(6px + env(safe-area-inset-bottom));z-index:40;gap:0}
-  header.top nav a{flex:1;text-align:center;font-size:11px;padding:9px 2px;border:none;background:transparent}
+  header.top nav a{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
+    font-size:12px;padding:6px 2px;border:none;background:transparent;min-height:44px}
   header.top nav a.on{background:transparent;color:#c5a059;font-weight:700}
   main{padding-bottom:calc(86px + env(safe-area-inset-bottom)) !important}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
@@ -203,7 +207,8 @@ def content_page(posts: list[dict], status: str = "") -> bytes:
                 f'<input type="hidden" name="id" value="{esc(p["id"])}">'
                 f'<input type="datetime-local" name="at" required>'
                 f'<button>جدولة</button></form>'
-                f'<form method="post" action="/ui/content/publish">'
+                f'<form method="post" action="/ui/content/publish" '
+                f"onsubmit=\"return confirm('النشر إلى القناة لا يمكن التراجع عنه. أرسِل الآن؟')\">"
                 f'<input type="hidden" name="id" value="{esc(p["id"])}">'
                 f'<button class="ghost">نشر الآن</button></form>'
             )
@@ -228,7 +233,7 @@ def content_page(posts: list[dict], status: str = "") -> bytes:
   <textarea name="body" placeholder="نص المنشور" required></textarea>
   <button>مسودة جديدة</button>
 </form>
-{''.join(rows) or '<p class="muted">لا عناصر.</p>'}
+{''.join(rows) or '<p class="muted">لا عناصر بعد — أنشئ أول مسودة من الحقل أعلاه.</p>'}
 """
     return page("المحتوى", body, "content")
 
@@ -353,7 +358,8 @@ def post_page(post: dict, history: list[dict], channel: dict | None) -> bytes:
             f'<form method="post" action="/ui/content/schedule">'
             f'<input type="hidden" name="id" value="{esc(post["id"])}">'
             f'<input type="datetime-local" name="at" required><button>جدولة</button></form>'
-            f'<form method="post" action="/ui/content/publish">'
+            f'<form method="post" action="/ui/content/publish" '
+            f"onsubmit=\"return confirm('النشر إلى القناة لا يمكن التراجع عنه. أرسِل الآن؟')\">"
             f'<input type="hidden" name="id" value="{esc(post["id"])}"><button class="ghost">نشر الآن</button></form>'
         )
     error = "" if not post.get("last_error") else (
