@@ -10,9 +10,12 @@ Endpoints
 from __future__ import annotations
 
 import base64
+import gzip
 import hmac
 import json
 import logging
+import os
+import re
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,6 +29,7 @@ from service import Bridge, to_epoch
 
 log = logging.getLogger("bridge.http")
 MAX_BODY = 1_048_576  # 1 MiB
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -109,6 +113,25 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         return False
 
+    def _static(self, name: str):
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", name or ""):
+            return self._send(404, {"error": "not found"})
+        path = os.path.join(STATIC_DIR, name)
+        if not os.path.isfile(path):
+            return self._send(404, {"error": "not found"})
+        ctype = "text/css; charset=utf-8" if name.endswith(".css") else "application/octet-stream"
+        accepts_gzip = "gzip" in (self.headers.get("Accept-Encoding") or "")
+        gz_path = path + ".gz"
+        headers = {"Cache-Control": "public, max-age=604800, immutable"}
+        if accepts_gzip and os.path.exists(gz_path):
+            with open(gz_path, "rb") as fh:
+                data = fh.read()
+            headers["Content-Encoding"] = "gzip"
+        else:
+            with open(path, "rb") as fh:
+                data = fh.read()
+        return self._send_bytes(200, data, ctype, headers)
+
     # -- GET ---------------------------------------------------------------
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -126,6 +149,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(405, {"error": "use POST /mcp"}, {"Allow": "POST"})
         if path == "/":
             return self._redirect("/ui")
+        if path.startswith("/static/"):
+            return self._static(path[len("/static/"):])
 
         if path.startswith("/ui"):
             if not self._require_basic():
@@ -148,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_html(200, ui.notifications_page(crm.notifications(60)))
         if path == "/ui/content":
             status = (query.get("status") or [""])[0]
-            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 100), status))
+            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 50), status))
         if path == "/ui/contacts":
             q = (query.get("q") or [""])[0]
             return self._send_html(200, ui.contacts_page(crm.list_contacts(q or None)))

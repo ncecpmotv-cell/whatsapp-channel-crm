@@ -28,68 +28,62 @@ DEAL_STAGES_AR = {
 }
 
 CSS = """
-:root{--bg:#0f1512;--card:#18211c;--line:#2a3a31;--ink:#eef3ee;--muted:#9db0a3;
---gold:#c5a059;--sage:#3e4d42;--ok:#4caf7d;--warn:#d9a04a;--bad:#c85c5c}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);
-font-family:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px}
-header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;
-border-bottom:1px solid var(--line);background:#0b110e;position:sticky;top:0;z-index:5}
-header .brand{font-weight:700;color:var(--gold);margin-inline-end:auto}
-a{color:var(--ink);text-decoration:none}
-nav a{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--card);font-size:13px}
-nav a.on{background:var(--sage);border-color:var(--gold)}
-main{padding:16px;max-width:1100px;margin:0 auto}
-h1{font-size:20px;margin:6px 0 14px}
-h2{font-size:16px;margin:18px 0 8px;color:var(--gold)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
-.stat b{display:block;font-size:22px;color:var(--gold)}
-.stat span{font-size:12px;color:var(--muted)}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:10px 0}
+:root{
+  --pico-font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pico-primary: #c5a059; --pico-primary-hover: #d8b56f; --pico-primary-focus: rgba(197,160,89,.25);
+  --pico-primary-inverse: #10160f;
+  --pico-background-color: #0f1512; --pico-card-background-color: #18211c;
+  --pico-card-border-color: #2a3a31; --pico-border-color: #2a3a31;
+  --pico-color: #eef3ee; --pico-muted-color: #9db0a3;
+  --pico-form-element-background-color: #0d1411; --pico-form-element-border-color: #2a3a31;
+  --pico-form-element-color: #eef3ee; --pico-form-element-focus-color: #c5a059;
+  --pico-h1-color:#eef3ee; --pico-h2-color:#c5a059; --pico-h3-color:#eef3ee;
+  --pico-spacing: .8rem; --pico-border-radius: 12px;
+}
+body{background:#0f1512}
+header.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;
+  border-bottom:1px solid var(--pico-border-color);background:#0b110e;position:sticky;top:0;z-index:30}
+header.top .brand{font-weight:700;color:#c5a059;margin-inline-end:auto;font-size:15px}
+header.top nav{display:flex;gap:6px;flex-wrap:wrap}
+header.top nav a{padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);
+  background:#18211c;font-size:13px;text-decoration:none}
+header.top nav a.on{background:#3e4d42;border-color:#c5a059;color:#fff}
+.bell{font-size:18px;padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);background:#18211c}
+.bell.hot{border-color:#c5a059;color:#c5a059;font-weight:700}
+main{padding-bottom:24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
+.stat{background:#18211c;border:1px solid #2a3a31;border-radius:12px;padding:12px}
+.stat b{display:block;font-size:22px;color:#c5a059;line-height:1.3}
+.stat span{font-size:12px;color:#9db0a3}
+.card{background:#18211c;border:1px solid #2a3a31;border-radius:12px;padding:12px;margin:10px 0}
+.card pre{white-space:pre-wrap;margin:6px 0;font-family:inherit}
 .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
-border:1px solid var(--line);color:var(--muted)}
-.badge.published{color:var(--ok);border-color:var(--ok)}
-.badge.failed{color:var(--bad);border-color:var(--bad)}
-.badge.scheduled{color:var(--warn);border-color:var(--warn)}
-.badge.review{color:var(--gold);border-color:var(--gold)}
-.muted{color:var(--muted);font-size:12px}
-pre{white-space:pre-wrap;margin:6px 0;font-family:inherit}
-form{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
-input,select,textarea{background:#0d1411;border:1px solid var(--line);color:var(--ink);
-border-radius:8px;padding:8px 10px;font-family:inherit;font-size:14px}
-textarea{width:100%;min-height:90px}
-button{background:var(--sage);color:var(--ink);border:1px solid var(--gold);border-radius:8px;
-padding:8px 12px;font-family:inherit;font-size:14px;cursor:pointer}
-button.ghost{background:transparent;border-color:var(--line)}
+  border:1px solid #2a3a31;color:#9db0a3}
+.badge.published{color:#4caf7d;border-color:#4caf7d}
+.badge.failed{color:#c85c5c;border-color:#c85c5c}
+.badge.scheduled{color:#d9a04a;border-color:#d9a04a}
+.badge.review{color:#c5a059;border-color:#c5a059}
+.muted{color:#9db0a3;font-size:12px}
 .row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
 .stack{display:flex;flex-direction:column;gap:4px}
 .chart{display:flex;align-items:flex-end;gap:4px;height:90px}
 .chart .bar{flex:1;background:#0d1411;border-radius:4px;display:flex;align-items:flex-end;min-width:6px}
-.chart .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--gold),var(--sage));border-radius:4px}
-table td{padding:6px 4px;border-bottom:1px solid var(--line);font-size:13px}
-.bell{font-size:18px;padding:6px 10px;border-radius:10px;border:1px solid var(--line);background:var(--card)}
-.bell.hot{border-color:var(--gold);color:var(--gold);font-weight:700}
+.chart .bar i{display:block;width:100%;background:linear-gradient(180deg,#c5a059,#3e4d42);border-radius:4px}
 .notif{display:flex;gap:10px;align-items:flex-start}
-.notif .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:6px;flex:0 0 8px}
+.notif .dot{width:8px;height:8px;border-radius:50%;background:#c5a059;margin-top:6px;flex:0 0 8px}
 .notif.read{opacity:.55}
+table td{padding:6px 4px;border-bottom:1px solid #2a3a31;font-size:13px}
 @media (max-width:640px){
-  header{padding:10px 12px;gap:8px}
-  header .brand{font-size:13px}
-  nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-around;
-      background:#0b110e;border-top:1px solid var(--line);padding:6px 4px;
-      padding-bottom:calc(6px + env(safe-area-inset-bottom));z-index:20}
-  nav a{flex:1;text-align:center;font-size:11px;padding:8px 2px;border:none;background:transparent}
-  nav a.on{background:transparent;color:var(--gold);font-weight:700}
-  main{padding:12px 12px calc(86px + env(safe-area-inset-bottom))}
-  h1{font-size:18px}
+  header.top{padding:8px 12px}
+  header.top nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-around;
+    background:#0b110e;border-top:1px solid #2a3a31;padding:6px 4px;
+    padding-bottom:calc(6px + env(safe-area-inset-bottom));z-index:40;gap:0}
+  header.top nav a{flex:1;text-align:center;font-size:11px;padding:9px 2px;border:none;background:transparent}
+  header.top nav a.on{background:transparent;color:#c5a059;font-weight:700}
+  main{padding-bottom:calc(86px + env(safe-area-inset-bottom)) !important}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .stat b{font-size:19px}
-  button,input,select{min-height:44px}
-  button{width:100%}
-  form{flex-direction:column;align-items:stretch}
   .row{flex-direction:column;align-items:stretch}
-  pre{font-size:13px}
+  button,input,select{min-height:44px}
 }
 """
 
@@ -131,14 +125,15 @@ def page(title: str, body: str, active: str = "") -> bytes:
     bell = (f'<a class="bell{" hot" if _UNREAD else ""}" href="/ui/notifications" '
             f'aria-label="الإشعارات">🔔{_UNREAD if _UNREAD else ""}</a>')
     doc = f"""<!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<html lang="ar" dir="rtl" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{esc(title)} · CRM</title>
 <meta name="theme-color" content="#0f1512">
 <link rel="manifest" href="/ui/manifest.webmanifest">
+<link rel="stylesheet" href="/static/pico.min.css">
 <style>{CSS}</style></head>
-<body><header><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
-<main>{body}</main></body></html>"""
+<body dir="rtl"><header class="top"><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
+<main class="container">{body}</main></body></html>"""
     return doc.encode("utf-8")
 
 
@@ -221,7 +216,7 @@ def content_page(posts: list[dict], status: str = "") -> bytes:
     </div>
     {badge(p["status"])}
   </div>
-  <pre>{esc((p["body"] or "")[:400])}</pre>
+  <pre>{esc((p["body"] or "")[:220])}</pre>
   {"" if not p.get("last_error") else f'<p class="muted">خطأ: {esc(p["last_error"])}</p>'}
   <div class="row">{actions}</div>
 </div>""")
