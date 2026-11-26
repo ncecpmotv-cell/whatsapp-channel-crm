@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS crm_posts (
     server_id    INTEGER,
     media_type   TEXT NOT NULL DEFAULT 'none',
     media_path   TEXT,
+    meta         TEXT,
     views        INTEGER NOT NULL DEFAULT 0,
     forwards     INTEGER NOT NULL DEFAULT 0,
     reactions    INTEGER NOT NULL DEFAULT 0,
@@ -131,6 +132,9 @@ class CrmClient:
         self._lock = store.lock
         with self._lock:
             self._conn.executescript(SCHEMA)
+            columns = {row[1] for row in self._conn.execute("PRAGMA table_info(crm_posts)")}
+            if "meta" not in columns:
+                self._conn.execute("ALTER TABLE crm_posts ADD COLUMN meta TEXT")
             self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -338,9 +342,9 @@ class CrmClient:
         ts = _now()
         self._exec(
             "INSERT INTO crm_posts (id, channel_jid, title, body, status, scheduled_at, media_type, "
-            "media_path, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "media_path, meta, created_by, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (post_id, channel, title, body, status, fields.get("scheduled_at"),
-             fields.get("media_type") or "none", fields.get("media_path"),
+             fields.get("media_type") or "none", fields.get("media_path"), fields.get("meta"),
              fields.get("created_by") or "human", ts, ts),
         )
         return self.get_channel_post(post_id) or {}
@@ -355,7 +359,7 @@ class CrmClient:
             "forwards": "forwards", "forwardsCount": "forwards",
             "reactions": "reactions", "reactionsCount": "reactions",
             "last_error": "last_error", "lastError": "last_error",
-            "media_type": "media_type", "media_path": "media_path",
+            "media_type": "media_type", "media_path": "media_path", "meta": "meta",
         }
         sets, params = [], []
         for key, value in fields.items():

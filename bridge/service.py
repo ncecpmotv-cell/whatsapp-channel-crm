@@ -23,6 +23,10 @@ MAX_ATTEMPTS = 5
 BACKOFF_STEP = 30  # seconds
 
 
+class PermanentPublishError(Exception):
+    """A failure that retrying cannot fix (unsupported type, missing media)."""
+
+
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
@@ -89,7 +93,8 @@ class Bridge:
         self.cfg = cfg
         self.store = store or Store(cfg.db_path)
         self.crm = crm or CrmClient(self.store)
-        self.gowa = gowa or GowaClient(cfg.gowa_base_url, device_id=cfg.gowa_device_id)
+        self.gowa = gowa or GowaClient(cfg.gowa_base_url, device_id=cfg.gowa_device_id,
+                                       user=cfg.gowa_user, password=cfg.gowa_password)
         self._stop = threading.Event()
         self.stats = {"inbound": 0, "channel_posts": 0, "dms": 0, "published": 0, "errors": 0}
 
@@ -264,7 +269,7 @@ class Bridge:
                 self.store.finish(item["id"], status="done")
                 processed += 1
             except Exception as exc:  # noqa: BLE001 - recorded and retried
-                if attempts + 1 >= MAX_ATTEMPTS:
+                if isinstance(exc, PermanentPublishError) or attempts + 1 >= MAX_ATTEMPTS:
                     self.store.finish(item["id"], status="failed", error=str(exc)[:500])
                     self._mark_failed(payload.get("postId"), exc)
                     log.error("publish failed permanently for %s: %s", payload.get("postId"), exc)
@@ -289,10 +294,31 @@ class Bridge:
             self.crm.mark_failed(post_id, "post has no channel_jid")
             raise ValueError("post has no channel_jid")
         text = (record.get("body") or "").strip() or (record.get("title") or "").strip()
-        if not text:
-            self.crm.mark_failed(post_id, "post has no text")
-            raise ValueError("post has no body/title to publish")
-        response = self.gowa.send_message(jid, text)
+        kind = (record.get("media_type") or "text").lower()
+        if kind == "poll":
+            if jid.endswith("@newsletter"):
+                message = ("استبيانات القناة غير مدعومة من واتساب (خطأ 479) — "
+                           "تُدعم في المحادثات المباشرة فقط")
+                self.crm.mark_failed(post_id, message)
+                raise PermanentPublishError(message)
+            meta = json.loads(record.get("meta") or "{}")
+            options = meta.get("options") or []
+            if len(options) < 2:
+                self.crm.mark_failed(post_id, "poll needs at least two options")
+                raise PermanentPublishError("poll needs at least two options")
+            response = self.gowa.send_poll(jid, (record.get("title") or text)[:250],
+                                           options, meta.get("max_answer") or 1)
+        elif kind in ("image", "video", "audio", "file"):
+            media_path = record.get("media_path") or ""
+            if not media_path:
+                self.crm.mark_failed(post_id, f"{kind} post without media_path")
+                raise PermanentPublishError(f"{kind} post has no media_path")
+            response = self.gowa.send_media(kind, jid, media_path, caption=text)
+        else:
+            if not text:
+                self.crm.mark_failed(post_id, "post has no text")
+                raise ValueError("post has no body/title to publish")
+            response = self.gowa.send_message(jid, text)
         results = response.get("results") if isinstance(response.get("results"), dict) else {}
         message_id = results.get("message_id") or results.get("id")
         if message_id:
@@ -420,14 +446,34 @@ class Bridge:
             log.warning("newsletter info failed: %s", exc)
             return {}
         result = response.get("results") or {}
+        if isinstance(result.get("data"), dict):
+            result = result["data"]
         thread = result.get("thread_metadata") or {}
         viewer = result.get("viewer_metadata") or {}
+
+        def text_of(value):
+            if isinstance(value, dict):
+                return value.get("text") or ""
+            return value or ""
+
+        def picture_of(value):
+            if isinstance(value, dict):
+                return value.get("url") or ""
+            return value or ""
+
+        subscribers = (viewer.get("subscribers") or viewer.get("subscribers_count")
+                       or thread.get("subscribers_count") or result.get("subscribers"))
+        try:
+            subscribers = int(subscribers) if subscribers is not None else None
+        except (TypeError, ValueError):
+            subscribers = None
+        invite = result.get("invite") or thread.get("invite") or ""
         info = {
             "jid": result.get("id") or jid,
-            "name": thread.get("name") or result.get("name") or "",
-            "subscribers": viewer.get("subscribers") or result.get("subscribers"),
-            "invite": result.get("invite") or "",
-            "picture": thread.get("picture") or "",
+            "name": text_of(thread.get("name")) or text_of(result.get("name")),
+            "subscribers": subscribers,
+            "invite": f"https://whatsapp.com/channel/{invite}" if invite and not invite.startswith("http") else invite,
+            "picture": picture_of(thread.get("picture")),
         }
         saved = self.crm.save_channel_info(info)
         log.info("channel info cached: %s (%s subscribers)", info["name"], info["subscribers"])

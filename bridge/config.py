@@ -43,6 +43,8 @@ class Config:
     log_level: str
     agent_can_publish: bool
     daily_publish_cap: int
+    gowa_user: str = ""
+    gowa_password: str = ""
 
     @classmethod
     def load(cls, path: str | None = None) -> "Config":
@@ -86,6 +88,8 @@ class Config:
             log_level=get("BRIDGE_LOG_LEVEL", "INFO").upper(),
             agent_can_publish=get_bool("AGENT_CAN_PUBLISH", False),
             daily_publish_cap=get_int("DAILY_PUBLISH_CAP", 30),
+            gowa_user=get("GOWA_USER"),
+            gowa_password=get("GOWA_PASSWORD"),
         )
         cfg.validate()
         return cfg
@@ -106,5 +110,5 @@ _KNOWN_KEYS = {
     "GOWA_BASE_URL", "GOWA_DEVICE_ID", "GOWA_WEBHOOK_SECRET", "BRIDGE_HOST", "BRIDGE_PORT",
     "BRIDGE_TOKEN", "NEWSLETTER_JIDS", "DEFAULT_COUNTRY_CODE", "CRM_DB_PATH",
     "BRIDGE_POLL_INTERVAL", "BRIDGE_CHANNEL_SYNC_INTERVAL", "BRIDGE_LOG_LEVEL",
-    "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP",
+    "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP", "GOWA_USER", "GOWA_PASSWORD",
 }
