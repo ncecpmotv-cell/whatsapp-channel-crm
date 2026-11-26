@@ -68,6 +68,13 @@ button.ghost{background:transparent;border-color:var(--line)}
 .chart .bar{flex:1;background:#0d1411;border-radius:4px;display:flex;align-items:flex-end;min-width:6px}
 .chart .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--gold),var(--sage));border-radius:4px}
 table td{padding:6px 4px;border-bottom:1px solid var(--line);font-size:13px}
+.chat{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.msg{max-width:85%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);background:var(--card)}
+.msg.me{align-self:flex-start;border-color:var(--sage)}
+.msg.bot{align-self:flex-end;border-color:var(--gold)}
+.msg .who{font-size:11px;color:var(--muted);margin-bottom:4px}
+.msg pre{margin:0}
+.composer textarea{min-height:70px}
 """
 
 
@@ -88,6 +95,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
         ("/ui/contacts", "العملاء", "contacts"),
         ("/ui/deals", "الفرص", "deals"),
         ("/ui/channel", "القناة", "channel"),
+        ("/ui/chat", "المحادثة", "chat"),
     ]
     links = "".join(
         f'<a href="{href}" class="{"on" if key == active else ""}">{label}</a>'
@@ -406,3 +414,24 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 {top_rows}
 """
     return page("القناة", body, "channel")
+
+
+# ------------------------------------------------------------------------ chat
+def chat_page(messages: list[dict]) -> bytes:
+    bubbles = "".join(
+        f'<div class="msg {"me" if m["role"] == "user" else "bot"}">'
+        f'<div class="who">{"أنت" if m["role"] == "user" else "PicoClaw"}</div>'
+        f'<pre>{esc(m["content"])}</pre></div>'
+        for m in messages
+    ) or ('<p class="muted">اسأل عن أي شيء في بياناتك: عدد المنشورات، أفضل منشور، '
+          'المتابعات المستحقة، حالة القناة، أو اطلب تحليلًا.</p>')
+    body = f"""
+<h1>محادثة PicoClaw</h1>
+<div class="chat">{bubbles}</div>
+<form method="post" action="/ui/chat" class="composer">
+  <textarea name="message" placeholder="مثال: حلّل أداء القناة آخر أسبوع وقارنه بالأسبوع السابق" required></textarea>
+  <button>إرسال</button>
+</form>
+<p class="muted">الوكيل يقرأ قاعدة البيانات عبر أدوات MCP — لا يخمّن. قد يستغرق الرد عدة ثوانٍ.</p>
+"""
+    return page("المحادثة", body, "chat")

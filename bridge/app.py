@@ -157,6 +157,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, {"error": "post not found"})
             channel = crm.get_channel_info(post["channel_jid"])
             return self._send_html(200, ui.post_page(post, crm.post_history(post_id, 30), channel))
+        if path == "/ui/chat":
+            return self._send_html(200, ui.chat_page(crm.chat_history(50)))
         if path == "/ui/channel":
             jid = (self.bridge.cfg.newsletter_jids or ("",))[0]
             return self._send_html(200, ui.channel_page(
@@ -283,6 +285,20 @@ class Handler(BaseHTTPRequestHandler):
                 crm.upsert_deal(form["title"], contact_id=contact_id, value=value,
                                 stage=form.get("stage"))
             return self._redirect("/ui/deals")
+        if path == "/ui/chat":
+            message = (form := ui.parse_form(raw)).get("message", "").strip()
+            if not message:
+                return self._redirect("/ui/chat")
+            crm.add_chat("user", message)
+            try:
+                import chat as pico_chat
+                answer = pico_chat.ask(message, timeout=120)
+                if not answer:
+                    answer = "لم يصل رد من الوكيل (قد تكون المهلة انتهت). أعد المحاولة."
+            except Exception as exc:  # noqa: BLE001 - surface it in the transcript
+                answer = f"تعذّر الوصول إلى PicoClaw: {exc}"
+            crm.add_chat("assistant", answer)
+            return self._redirect("/ui/chat")
         if path == "/ui/channel/refresh":
             self.bridge.refresh_channel_info()
             return self._redirect("/ui/channel")

@@ -100,6 +100,12 @@ CREATE TABLE IF NOT EXISTS crm_stats (
     captured_at INTEGER NOT NULL,
     PRIMARY KEY (post_id, day)
 );
+CREATE TABLE IF NOT EXISTS crm_chat (
+    id      TEXT PRIMARY KEY,
+    role    TEXT NOT NULL,
+    content TEXT NOT NULL,
+    at      INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS crm_channel_info (
     jid         TEXT PRIMARY KEY,
     name        TEXT,
@@ -533,6 +539,17 @@ class CrmClient:
             "FROM crm_stats WHERE day >= date('now', ?) GROUP BY day ORDER BY day ASC",
             (f"-{max(1, days)} day",))
         return rows
+
+    # -- chat transcript ----------------------------------------------------
+    def add_chat(self, role: str, content: str) -> dict:
+        cid = uuid.uuid4().hex[:12]
+        self._exec("INSERT INTO crm_chat (id, role, content, at) VALUES (?,?,?,?)",
+                   (cid, role, content, _now()))
+        return {"id": cid, "role": role, "content": content}
+
+    def chat_history(self, limit: int = 50) -> list[dict]:
+        rows = self._all("SELECT * FROM crm_chat ORDER BY at DESC, rowid DESC LIMIT ?", (limit,))
+        return list(reversed(rows))
 
     def stats(self) -> dict:
         def count(sql: str) -> int:
