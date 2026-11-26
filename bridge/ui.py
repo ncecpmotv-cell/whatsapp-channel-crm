@@ -6,7 +6,9 @@ Every mutating action is a plain HTML form POST (works on any phone browser).
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import html
+import os
 import threading
 import json
 from urllib.parse import parse_qs
@@ -121,9 +123,9 @@ button{min-height:44px;padding-inline:16px;font-weight:600}
     background:var(--surface-2);border-top:1px solid var(--line);padding:2px 4px;
     padding-bottom:calc(2px + env(safe-area-inset-bottom));z-index:40;gap:0}
   header.top nav a{flex:1;flex-direction:column;gap:1px;border:none;background:transparent;
-    font-size:10.5px;color:var(--ink-2);padding:4px 2px;min-height:46px;justify-content:center;
+    font-size:10px;color:var(--ink-2);padding:3px 2px;min-height:44px;justify-content:center;
     border-top:2px solid transparent;border-radius:0}
-  header.top nav a svg{width:18px;height:18px;flex:0 0 18px}
+  header.top nav a svg{width:17px;height:17px;flex:0 0 17px}
   header.top nav a.on{color:var(--accent);border-top-color:var(--accent);font-weight:700}
   main{padding-bottom:calc(150px + env(safe-area-inset-bottom)) !important}
   h1{font-size:var(--fs-4)}
@@ -149,9 +151,9 @@ details.panel>.body{padding:0 14px 14px}
 details.panel[open]>summary{border-bottom:1px solid var(--line)}
 /* ---- filter chips ----------------------------------------------------- */
 .chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 10px}
-.chips a{display:inline-flex;align-items:center;min-height:34px;padding:0 10px;
+.chips a{display:inline-flex;align-items:center;min-height:31px;padding:0 10px;
   border-radius:999px;border:1px solid var(--line);background:var(--surface-1);color:var(--ink-2);
-  font-size:var(--fs-1);text-decoration:none;white-space:nowrap;
+  font-size:12px;text-decoration:none;white-space:nowrap;
   transition:background .15s ease,color .15s ease,border-color .15s ease,transform .12s ease}
 .chips a.on{background:rgba(197,160,89,.12);border-color:var(--accent);color:var(--accent);font-weight:700}
 .chips a:active{transform:scale(.97)}
@@ -192,8 +194,8 @@ details.panel[open]>summary{border-bottom:1px solid var(--line)}
 .empty [role=button]{margin-top:12px}
 /* ---- content card ----------------------------------------------------- */
 .post{display:flex;flex-direction:column;gap:0}
-.post-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:4px}
-.post-head .badge{flex:0 0 auto;margin-top:2px}
+.post-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px}
+.post-head .badge{flex:0 0 auto;margin-top:2px;order:2}
 .post-title{flex:1;min-width:0;font-size:var(--fs-2);font-weight:700;color:var(--ink);
   text-decoration:none;line-height:1.5}
 .post-title:hover{color:var(--accent)}
@@ -217,9 +219,11 @@ button.subtle.danger:hover{color:#e8a0a0;border-color:#7a4444}
 /* ---- pagination ------------------------------------------------------- */
 .pager{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;
   margin:18px 0 6px}
-.pager .pg{min-width:42px;height:42px;display:inline-flex;align-items:center;justify-content:center;
-  border:1px solid var(--line);border-radius:12px;color:var(--ink-2);text-decoration:none;
-  font-size:var(--fs-2);font-variant-numeric:tabular-nums;background:var(--surface-1)}
+.pager .pg{min-width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;
+  border:1px solid var(--line);border-radius:11px;color:var(--ink-2);text-decoration:none;
+  font-size:14px;font-variant-numeric:tabular-nums;background:var(--surface-1)}
+.pager a.pg,.pager a.pg:link,.pager a.pg:visited{color:var(--ink-2);text-decoration:none}
+.pager span.pg.on{border-color:var(--accent);color:var(--accent);background:rgba(197,160,89,.14);font-weight:700}
 .pager a.pg:hover{border-color:var(--accent);color:var(--ink)}
 .pager .pg.on{background:rgba(197,160,89,.14);border-color:var(--accent);color:var(--accent);font-weight:700}
 .pager .pg.nav{font-size:20px;line-height:1}
@@ -269,6 +273,22 @@ def write_stylesheet(directory: str) -> str:
 
 _UNREAD = 0
 _FLASH = threading.local()
+_JS_VERSION: str | None = None
+
+
+def css_version() -> str:
+    return hashlib.sha1(CSS.encode("utf-8")).hexdigest()[:8]
+
+
+def js_version() -> str:
+    global _JS_VERSION
+    if _JS_VERSION is None:
+        try:
+            with open(os.path.join(os.path.dirname(__file__), "static", "app.js"), "rb") as fh:
+                _JS_VERSION = hashlib.sha1(fh.read()).hexdigest()[:8]
+        except OSError:
+            _JS_VERSION = "0"
+    return _JS_VERSION
 
 
 def set_flash(message: str) -> None:
@@ -329,7 +349,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <link rel="manifest" href="/ui/manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1512'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23c5a059' stroke-width='2.5'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/pico.min.css">
-<link rel="stylesheet" href="/static/app.css"></head>
+<link rel="stylesheet" href="/static/app.css?v={css_version()}"></head>
 <body dir="rtl">
 <div class="ptr" id="ptr" aria-hidden="true">↻</div>
 <div class="toast" id="toast" role="status" aria-live="polite" data-msg="{esc(flash)}"{" hidden" if not flash else ""}>
@@ -340,7 +360,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
 </div>
 <header class="top"><span class="brand">CRM · قناة واتساب</span>{head_act}{bell}<nav>{links}</nav></header>
 <main class="container">{body}</main>
-<script src="/static/app.js" defer></script></body></html>"""
+<script src="/static/app.js?v={js_version()}" defer></script></body></html>"""
     return doc.encode("utf-8")
 
 
@@ -487,8 +507,8 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
         rows.append(f"""
 <article class="card post">
   <div class="post-head">
-    {badge(st)}
     <a class="post-title" href="/ui/post/{pid}">{esc(p["title"] or text[:70] or "بدون عنوان")}</a>
+    {badge(st)}
   </div>
   <p class="muted meta">{esc(TYPE_AR.get(kind, kind))} · {when}</p>
   {"" if not text else f'<p class="post-body">{esc(text[:160])}</p>'}
@@ -497,9 +517,9 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
 </article>""")
 
     def page_link(n: int) -> str:
-        on = n == page_no
-        return (f'<a class="pg{" on" if on else ""}" href="/ui/content?{query}page={n}"'
-                f'{" aria-current=\"page\"" if on else ""}>{n}</a>')
+        if n == page_no:
+            return f'<span class="pg on" aria-current="page">{n}</span>'
+        return f'<a class="pg" href="/ui/content?{query}page={n}">{n}</a>'
 
     pager = ""
     if pages > 1:
@@ -513,8 +533,8 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
                   if page_no > 1 else '<span class="pg nav off" aria-hidden="true">›</span>')
         next_a = (f'<a class="pg nav" href="/ui/content?{query}page={page_no + 1}" aria-label="الصفحة التالية">‹</a>'
                   if page_no < pages else '<span class="pg nav off" aria-hidden="true">‹</span>')
-        pager = (f'<nav class="pager" aria-label="ترقيم الصفحات">{prev_a}{"".join(nums)}{next_a}</nav>'
-                 f'<p class="muted pager-info">صفحة {page_no} من {pages}</p>')
+        pager = (f'<p class="muted pager-info">صفحة {page_no} من {pages}</p>'
+                 f'<nav class="pager" aria-label="ترقيم الصفحات">{prev_a}{"".join(nums)}{next_a}</nav>')
 
     empty_state = ('<div class="empty"><b>لا محتوى بعد</b>'
                    '<p>ابدأ بأول فكرة أو مسودة، وسيظهر هنا.</p>'
