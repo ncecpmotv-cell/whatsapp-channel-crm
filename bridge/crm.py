@@ -90,6 +90,23 @@ CREATE TABLE IF NOT EXISTS crm_activities (
     done       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS crm_activities_due ON crm_activities(due_at) WHERE done = 0;
+CREATE TABLE IF NOT EXISTS crm_stats (
+    post_id    TEXT NOT NULL,
+    day        TEXT NOT NULL,
+    views      INTEGER NOT NULL DEFAULT 0,
+    forwards   INTEGER NOT NULL DEFAULT 0,
+    reactions  INTEGER NOT NULL DEFAULT 0,
+    captured_at INTEGER NOT NULL,
+    PRIMARY KEY (post_id, day)
+);
+CREATE TABLE IF NOT EXISTS crm_channel_info (
+    jid         TEXT PRIMARY KEY,
+    name        TEXT,
+    subscribers INTEGER,
+    invite      TEXT,
+    picture     TEXT,
+    fetched_at  INTEGER
+);
 """
 
 STAGES = ("idea", "draft", "review", "scheduled", "publishing", "published", "failed")
@@ -447,6 +464,71 @@ class CrmClient:
             "posts": len(rows),
         }
         return {"days": days, "total": total, "posts": rows}
+
+    # -- history / channel profile -----------------------------------------
+    def record_stats(self, post_id: str) -> None:
+        """Snapshot today's counters for a post (one row per day)."""
+        post = self.get_channel_post(post_id)
+        if not post:
+            return
+        day = time.strftime("%Y-%m-%d", time.gmtime())
+        self._exec(
+            "INSERT INTO crm_stats (post_id, day, views, forwards, reactions, captured_at) "
+            "VALUES (?,?,?,?,?,?) ON CONFLICT(post_id, day) DO UPDATE SET "
+            "views=excluded.views, forwards=excluded.forwards, reactions=excluded.reactions, "
+            "captured_at=excluded.captured_at",
+            (post_id, day, post.get("views") or 0, post.get("forwards") or 0,
+             post.get("reactions") or 0, _now()),
+        )
+
+    def post_history(self, post_id: str, days: int = 30) -> list[dict]:
+        return self._all(
+            "SELECT day, views, forwards, reactions FROM crm_stats "
+            "WHERE post_id = ? ORDER BY day ASC", (post_id,))[-max(1, days):]
+
+    def save_channel_info(self, info: dict) -> dict:
+        self._exec(
+            "INSERT INTO crm_channel_info (jid, name, subscribers, invite, picture, fetched_at) "
+            "VALUES (?,?,?,?,?,?) ON CONFLICT(jid) DO UPDATE SET name=excluded.name, "
+            "subscribers=excluded.subscribers, invite=excluded.invite, picture=excluded.picture, "
+            "fetched_at=excluded.fetched_at",
+            (info.get("jid"), info.get("name"), info.get("subscribers"),
+             info.get("invite"), info.get("picture"), _now()),
+        )
+        return self.get_channel_info(info.get("jid") or "") or {}
+
+    def get_channel_info(self, jid: str) -> dict | None:
+        return self._one("SELECT * FROM crm_channel_info WHERE jid = ?", (jid,))
+
+    def channel_summary(self, days: int = 30) -> dict:
+        since = _now() - max(1, days) * 86400
+        posts = self._all(
+            "SELECT id, title, body, views, forwards, reactions, published_at FROM crm_posts "
+            "WHERE status='published' AND COALESCE(published_at, updated_at) >= ? "
+            "ORDER BY COALESCE(published_at, updated_at) DESC", (since,))
+        views = sum(p["views"] or 0 for p in posts)
+        forwards = sum(p["forwards"] or 0 for p in posts)
+        reactions = sum(p["reactions"] or 0 for p in posts)
+        best = max(posts, key=lambda p: p["views"] or 0, default=None)
+        return {
+            "days": days,
+            "count": len(posts),
+            "views": views,
+            "forwards": forwards,
+            "reactions": reactions,
+            "avg_views": round(views / len(posts), 1) if posts else 0,
+            "engagement_pct": round((forwards + reactions) * 100 / views, 2) if views else 0,
+            "best": best,
+            "top": sorted(posts, key=lambda p: (p["views"] or 0), reverse=True)[:5],
+            "posts": posts,
+        }
+
+    def daily_series(self, days: int = 14) -> list[dict]:
+        rows = self._all(
+            "SELECT day, SUM(views) AS views, SUM(forwards) AS forwards, SUM(reactions) AS reactions "
+            "FROM crm_stats WHERE day >= date('now', ?) GROUP BY day ORDER BY day ASC",
+            (f"-{max(1, days)} day",))
+        return rows
 
     def stats(self) -> dict:
         def count(sql: str) -> int:

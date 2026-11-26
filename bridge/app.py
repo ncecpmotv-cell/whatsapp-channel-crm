@@ -150,6 +150,18 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_html(200, ui.contacts_page(crm.list_contacts(q or None)))
         if path == "/ui/deals":
             return self._send_html(200, ui.deals_page(crm.list_deals()))
+        if path.startswith("/ui/post/"):
+            post_id = path.rsplit("/", 1)[-1]
+            post = crm.get_channel_post(post_id)
+            if not post:
+                return self._send(404, {"error": "post not found"})
+            channel = crm.get_channel_info(post["channel_jid"])
+            return self._send_html(200, ui.post_page(post, crm.post_history(post_id, 30), channel))
+        if path == "/ui/channel":
+            jid = (self.bridge.cfg.newsletter_jids or ("",))[0]
+            return self._send_html(200, ui.channel_page(
+                crm.get_channel_info(jid), crm.channel_summary(30),
+                crm.daily_series(14), crm.list_posts("published", 20)))
         if path == "/ui/metrics":
             days = int((query.get("days") or ["7"])[0] or 7)
             return self._send_html(200, ui.metrics_page(crm.channel_metrics(days)))
@@ -271,6 +283,9 @@ class Handler(BaseHTTPRequestHandler):
                 crm.upsert_deal(form["title"], contact_id=contact_id, value=value,
                                 stage=form.get("stage"))
             return self._redirect("/ui/deals")
+        if path == "/ui/channel/refresh":
+            self.bridge.refresh_channel_info()
+            return self._redirect("/ui/channel")
         if path == "/ui/followup/done":
             if form.get("id"):
                 crm.complete_activity(form["id"])

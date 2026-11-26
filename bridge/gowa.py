@@ -64,6 +64,12 @@ class GowaClient:
             f"/newsletter/messages?newsletter_id={urllib.parse.quote(newsletter_id)}&count={count}",
         )
 
+    def newsletter_info(self, newsletter_id: str):
+        return self._call(
+            "GET",
+            f"/newsletter/info?newsletter_id={urllib.parse.quote(newsletter_id)}",
+        )
+
     def newsletter_message_updates(self, newsletter_id: str, after: int = 1, count: int = 100):
         return self._call(
             "GET",

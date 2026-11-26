@@ -104,6 +104,14 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {}},
     },
     {
+        "name": "channel_info",
+        "description": "WhatsApp channel profile (name, subscribers, invite) + summary stats.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 90, "default": 30}},
+        },
+    },
+    {
         "name": "channel_metrics",
         "description": "Channel numbers: views / forwards / reactions for the last N days.",
         "inputSchema": {
@@ -323,6 +331,19 @@ class McpServer:
         posts = self.crm.list_posts("review", 50) + self.crm.list_posts("scheduled", 50)
         posts.sort(key=lambda p: p.get("scheduled_at") or 0)
         return {"count": len(posts), "list": posts}
+
+    def _tool_channel_info(self, args: dict) -> dict:
+        days = int(args.get("days") or 30)
+        summary = self.crm.channel_summary(days)
+        jid = None
+        try:
+            rows = self.crm._all("SELECT jid FROM crm_posts ORDER BY updated_at DESC LIMIT 1")
+            jid = rows[0]["jid"] if rows else None
+        except Exception:  # noqa: BLE001
+            jid = None
+        info = self.crm.get_channel_info(jid) if jid else None
+        return {"profile": info, "summary": {k: v for k, v in summary.items() if k != "posts"},
+                "series": self.crm.daily_series(14)}
 
     def _tool_channel_metrics(self, args: dict) -> dict:
         return self.crm.channel_metrics(int(args.get("days") or 7))

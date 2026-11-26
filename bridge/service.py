@@ -124,6 +124,7 @@ class Bridge:
             try:
                 self.sync_channels()
                 self.sync_counters()
+                self.refresh_channel_info()
             except Exception:
                 log.exception("channel sync error")
                 self._stop.wait(5)
@@ -402,9 +403,35 @@ class Bridge:
                     int(reactions) if isinstance(reactions, (int, float)) else None,
                     int(server_id) if isinstance(server_id, int) else None,
                 )
+                self.crm.record_stats(record["id"])
                 updated += 1
                 log.info("counters updated for %s", message_id)
         return updated
+
+    # -- channel profile ---------------------------------------------------
+    def refresh_channel_info(self) -> dict:
+        """Pull name/subscribers/invite from WhatsApp and cache it in SQLite."""
+        jid = (self.cfg.newsletter_jids or ("",))[0]
+        if not jid:
+            return {}
+        try:
+            response = self.gowa.newsletter_info(jid)
+        except GowaError as exc:
+            log.warning("newsletter info failed: %s", exc)
+            return {}
+        result = response.get("results") or {}
+        thread = result.get("thread_metadata") or {}
+        viewer = result.get("viewer_metadata") or {}
+        info = {
+            "jid": result.get("id") or jid,
+            "name": thread.get("name") or result.get("name") or "",
+            "subscribers": viewer.get("subscribers") or result.get("subscribers"),
+            "invite": result.get("invite") or "",
+            "picture": thread.get("picture") or "",
+        }
+        saved = self.crm.save_channel_info(info)
+        log.info("channel info cached: %s (%s subscribers)", info["name"], info["subscribers"])
+        return saved
 
     # -- diagnostics -------------------------------------------------------
     def health(self) -> dict:
