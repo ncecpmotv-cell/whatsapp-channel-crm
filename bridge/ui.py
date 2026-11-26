@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime as dt
 import html
+import threading
 import json
 from urllib.parse import parse_qs
 
@@ -136,6 +137,69 @@ button{min-height:44px;padding-inline:16px;font-weight:600}
   .row form{flex-direction:row}
   .row form button{width:auto}
 }
+/* ---- progressive disclosure ------------------------------------------ */
+details.panel{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-2);
+  margin:var(--sp-2) 0;overflow:hidden}
+details.panel>summary{list-style:none;cursor:pointer;padding:14px;display:flex;align-items:center;
+  gap:8px;font-size:var(--fs-2);font-weight:600;min-height:52px}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::after{content:"›";margin-inline-start:auto;color:var(--ink-2);
+  transition:transform .18s ease;display:inline-block;font-size:20px;line-height:1}
+details.panel[open]>summary::after{transform:rotate(90deg)}
+details.panel>.body{padding:0 14px 14px}
+details.panel[open]>summary{border-bottom:1px solid var(--line)}
+/* ---- filter chips ----------------------------------------------------- */
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chips a{flex:0 0 auto;display:inline-flex;align-items:center;min-height:40px;padding:0 14px;
+  border-radius:999px;border:1px solid var(--line);background:var(--surface-1);color:var(--ink-2);
+  font-size:var(--fs-1);text-decoration:none;white-space:nowrap;
+  transition:background .15s ease,color .15s ease,border-color .15s ease,transform .12s ease}
+.chips a.on{background:rgba(197,160,89,.12);border-color:var(--accent);color:var(--accent);font-weight:700}
+.chips a:active{transform:scale(.97)}
+/* ---- FAB -------------------------------------------------------------- */
+.fab{position:fixed;inset-inline-start:16px;bottom:calc(84px + env(safe-area-inset-bottom));
+  z-index:45;width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);
+  color:var(--accent-ink);box-shadow:0 6px 18px rgba(0,0,0,.45);display:flex;align-items:center;
+  justify-content:center;font-size:26px;line-height:1;padding:0;
+  transition:transform .15s ease}
+.fab:active{transform:scale(.94)}
+@media (min-width:641px){.fab{inset-inline-start:auto;inset-inline-end:24px;bottom:24px}}
+/* ---- toast ------------------------------------------------------------ */
+.toast{position:fixed;inset-inline:12px;bottom:calc(152px + env(safe-area-inset-bottom));z-index:60;
+  display:flex;align-items:center;gap:10px;max-width:520px;margin-inline:auto;padding:12px 14px;
+  border-radius:var(--r-2);background:#1d2a23;border:1px solid var(--accent);color:var(--ink);
+  font-size:var(--fs-2);box-shadow:0 10px 30px rgba(0,0,0,.5);
+  transition:opacity .2s ease,transform .2s ease}
+.toast.out{opacity:0;transform:translateY(8px)}
+@media (min-width:641px){.toast{bottom:24px}}
+/* ---- skeleton --------------------------------------------------------- */
+.skel{position:fixed;inset:0;z-index:70;background:rgba(11,17,14,.94);padding:76px 16px 16px;
+  display:flex;flex-direction:column;gap:10px}
+.skel .bar{height:14px;border-radius:8px;background:linear-gradient(90deg,#1b2620 25%,#24332b 37%,#1b2620 63%);
+  background-size:400% 100%;animation:sh 1.2s ease-in-out infinite}
+.skel .card-s{height:86px;border-radius:var(--r-2);border:1px solid var(--line);
+  background:linear-gradient(90deg,#1b2620 25%,#24332b 37%,#1b2620 63%);
+  background-size:400% 100%;animation:sh 1.2s ease-in-out infinite}
+@keyframes sh{0%{background-position:100% 0}100%{background-position:0 0}}
+/* ---- pull to refresh -------------------------------------------------- */
+.ptr{position:fixed;top:0;inset-inline:0;height:var(--pull,0px);overflow:hidden;display:flex;
+  align-items:center;justify-content:center;background:var(--surface-2);color:var(--accent);
+  z-index:50;transition:height .1s linear;font-size:18px}
+.ptr.on{transition:none}
+/* ---- empty state ------------------------------------------------------ */
+.empty{text-align:center;padding:28px 16px;border:1px dashed var(--line);
+  border-radius:var(--r-2);color:var(--ink-2)}
+.empty b{display:block;color:var(--ink);font-size:var(--fs-3);margin-bottom:6px}
+.empty [role=button]{margin-top:12px}
+/* ---- buttons ---------------------------------------------------------- */
+button.ghost,a.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+button.ghost:hover,a.ghost:hover{background:var(--surface-2);border-color:var(--accent)}
+/* ---- micro-interactions ----------------------------------------------- */
+.card,header.top nav a,.stat,button{transition:border-color .15s ease,transform .15s ease,opacity .15s ease}
+.card:active{transform:scale(.997)}
+button[disabled]{opacity:.6}
 """
 
 
@@ -174,6 +238,15 @@ def write_stylesheet(directory: str) -> str:
 
 
 _UNREAD = 0
+_FLASH = threading.local()
+
+
+def set_flash(message: str) -> None:
+    _FLASH.msg = message
+
+
+def flash_text() -> str:
+    return getattr(_FLASH, "msg", "")
 
 
 def set_unread(count: int) -> None:
@@ -203,8 +276,9 @@ def page(title: str, body: str, active: str = "") -> bytes:
         for href, label, key in nav
     )
     bell = (f'<a class="bell{" hot" if _UNREAD else ""}" href="/ui/notifications" '
-            f'aria-label="الإشعارات ({_UNREAD} غير مقروء)">🔔'
+            f'aria-label="🔔 الإشعارات {_UNREAD if _UNREAD else ""}">🔔'
             f'{_UNREAD if _UNREAD else ""}</a>')
+    flash = flash_text()
     doc = f"""<!doctype html>
 <html lang="ar" dir="rtl" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -214,8 +288,17 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1512'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23c5a059' stroke-width='2.5'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/pico.min.css">
 <link rel="stylesheet" href="/static/app.css"></head>
-<body dir="rtl"><header class="top"><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
-<main class="container">{body}</main></body></html>"""
+<body dir="rtl">
+<div class="ptr" id="ptr" aria-hidden="true">↻</div>
+<div class="toast" id="toast" role="status" aria-live="polite" data-msg="{esc(flash)}"{" hidden" if not flash else ""}>
+  <span aria-hidden="true">✓</span><span>{esc(flash)}</span></div>
+<div class="skel" id="skel" hidden aria-hidden="true">
+  <div class="bar" style="width:45%"></div><div class="card-s"></div><div class="card-s"></div><div class="card-s"></div>
+  <div class="bar" style="width:65%"></div><div class="bar" style="width:35%"></div>
+</div>
+<header class="top"><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
+<main class="container">{body}</main>
+<script src="/static/app.js" defer></script></body></html>"""
     return doc.encode("utf-8")
 
 
@@ -262,8 +345,14 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
   <div class="stat"><b>{esc(total.get("reactions", 0))}</b><span>تفاعل</span></div>
   <div class="stat"><b>{esc(unread)}</b><span>رسائل غير مقروءة</span></div>
 </div>
-<h2>مجدول</h2>{sched_rows}
-<h2>متابعات مستحقة</h2>{follow_rows}
+<details class="panel"{' open' if scheduled else ''}>
+  <summary>مجدول <span class="badge scheduled">{len(scheduled)}</span></summary>
+  <div class="body">{sched_rows}</div>
+</details>
+<details class="panel"{' open' if followups else ''}>
+  <summary>متابعات مستحقة <span class="badge review">{len(followups)}</span></summary>
+  <div class="body">{follow_rows}</div>
+</details>
 """
     return page("اليوم", body, "today")
 
@@ -285,10 +374,11 @@ syncType();
 def content_page(posts: list[dict], status: str = "", error: str = "",
                  page_no: int = 1, has_next: bool = False) -> bytes:
     query = f"status={status}&" if status else ""
+    chip_items = [("", "الكل")] + [(k, v) for k, v in STAGES_AR.items()]
     filters = "".join(
-        f'<a href="/ui/content?status={key}" class="badge {"" if status != key else "scheduled"}">'
-        f'{esc(label)}</a> '
-        for key, label in STAGES_AR.items()
+        f'<a href="/ui/content{"?status=" + key if key else ""}" class="{"on" if status == key else ""}"'
+        f'{" aria-current=\"true\"" if status == key else ""}>{esc(label)}</a>'
+        for key, label in chip_items
     )
     errors = {
         "poll_options": "الاستبيان يحتاج سؤالًا وخيارين على الأقل (سطر لكل خيار).",
@@ -346,11 +436,16 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
                  if has_next else "")
     pager = f'<div class="row" style="margin:10px 0">{prev_link}{next_link}</div>' if (prev_link or next_link) else ""
 
+    empty_state = ('<div class="empty"><b>لا محتوى بعد</b>'
+                   '<p>ابدأ بأول فكرة أو مسودة، وسيظهر هنا.</p>'
+                   '<a role="button" href="#newContent" id="emptyCta">إنشاء محتوى</a></div>')
     body = f"""
 <h1>المحتوى</h1>
 {banner}
-<p>{filters}</p>
-<h2>محتوى جديد</h2>
+<div class="chips" role="navigation" aria-label="تصفية حسب الحالة">{filters}</div>
+<details class="panel" id="newContent">
+<summary>محتوى جديد</summary>
+<div class="body">
 <form method="post" action="/ui/content/new" enctype="multipart/form-data" class="composer">
   <label>النوع
     <select name="type" id="ctype">
@@ -371,10 +466,13 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
   <label>موعد النشر (اختياري) <input type="datetime-local" name="at"></label>
   <button>إنشاء</button>
 </form>
+</div>
+</details>
 <p class="muted">النشر النهائي قرار بشري: «نشر الآن» أو «جدولة». الاستبيانات لا تدعمها قنوات واتساب (خطأ 479) وتُرسل في المحادثات فقط.</p>
 <h2>العناصر <span class="muted">— صفحة {page_no}</span></h2>
-{''.join(rows) or '<p class="muted">لا عناصر بعد — أنشئ أول مسودة من الأعلى.</p>'}
+{''.join(rows) or empty_state}
 {pager}
+<button class="fab" id="fab" hidden aria-label="محتوى جديد" aria-controls="newContent">+</button>
 {TYPE_SCRIPT}
 """
     return page("المحتوى", body, "content")

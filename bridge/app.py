@@ -166,17 +166,22 @@ class Handler(BaseHTTPRequestHandler):
             path = os.path.join(STATIC_DIR, name)
         if not os.path.isfile(path):
             return self._send(404, {"error": "not found"})
-        ctype = "text/css; charset=utf-8" if name.endswith(".css") else "application/octet-stream"
+        ctype = ("text/css; charset=utf-8" if name.endswith(".css")
+                 else "text/javascript; charset=utf-8" if name.endswith(".js")
+                 else "application/octet-stream")
         accepts_gzip = "gzip" in (self.headers.get("Accept-Encoding") or "")
         gz_path = path + ".gz"
         headers = {"Cache-Control": "public, max-age=604800, immutable"}
+        with open(path, "rb") as fh:
+            data = fh.read()
         if accepts_gzip and os.path.exists(gz_path):
             with open(gz_path, "rb") as fh:
                 data = fh.read()
             headers["Content-Encoding"] = "gzip"
-        else:
-            with open(path, "rb") as fh:
-                data = fh.read()
+        elif accepts_gzip and len(data) >= 1024:
+            data = gzip.compress(data, 9)
+            headers["Content-Encoding"] = "gzip"
+            headers["Vary"] = "Accept-Encoding"
         return self._send_bytes(200, data, ctype, headers, compress=False, validators=False)
 
     # -- GET ---------------------------------------------------------------
@@ -212,7 +217,22 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send(404, {"error": "not found"})
 
+    FLASH = {
+        "created": "أُنشئ المحتوى — أضف موعدًا أو انشره من بطاقته.",
+        "updated": "حُدِّث المحتوى.",
+        "deleted": "حُذف العنصر.",
+        "published": "تم النشر إلى القناة.",
+        "scheduled": "تمت الجدولة.",
+        "synced": "تمت مزامنة أرشيف القناة.",
+        "refreshed": "حُدِّثت بيانات القناة.",
+        "contact_added": "أُضيف العميل.",
+        "deal_added": "أُضيفت الفرصة.",
+        "done": "أُنجزت المتابعة.",
+        "read": "قُرئت الإشعارات.",
+    }
+
     def _ui_get(self, path: str, query: dict):
+        ui.set_flash(self.FLASH.get((query.get("ok") or [""])[0], ""))
         crm = self.bridge.crm
         ui.TZ_OFFSET = self.bridge.cfg.tz_offset
         ui.set_unread(crm.unread_notifications())
@@ -384,7 +404,7 @@ class Handler(BaseHTTPRequestHandler):
         })
         if at:
             crm.schedule_post(post["id"], at, approved=True)
-        return self._redirect(f"/ui/post/{post['id']}")
+        return self._redirect(f"/ui/post/{post['id']}?ok=created")
 
     def _edit_content(self, crm, raw: bytes):
         fields, _ = self._form(raw)
@@ -401,7 +421,7 @@ class Handler(BaseHTTPRequestHandler):
                 crm.schedule_post(post_id, at, approved=True)
         except (ValueError, PermissionError):
             return self._redirect(f"/ui/post/{post_id}?error=not_editable")
-        return self._redirect(f"/ui/post/{post_id}")
+        return self._redirect(f"/ui/post/{post_id}?ok=updated")
 
     def _delete_content(self, crm, raw: bytes):
         fields, _ = self._form(raw)
@@ -410,7 +430,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._redirect("/ui/content")
         try:
             crm.delete_post(post_id)
-            return self._redirect("/ui/content")
+            return self._redirect("/ui/content?ok=deleted")
         except (ValueError, PermissionError):
             return self._redirect(f"/ui/post/{post_id}?error=published")
 
