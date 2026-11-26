@@ -28,66 +28,108 @@ DEAL_STAGES_AR = {
 }
 
 CSS = """
+/* ---- tokens ---------------------------------------------------------- */
 :root{
-  --pico-font-family: "IBM Plex Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --pico-primary: #c5a059; --pico-primary-hover: #d8b56f; --pico-primary-focus: rgba(197,160,89,.25);
-  --pico-primary-inverse: #10160f;
-  --pico-background-color: #0f1512; --pico-card-background-color: #18211c;
-  --pico-card-border-color: #2a3a31; --pico-border-color: #2a3a31;
-  --pico-color: #eef3ee; --pico-muted-color: #9db0a3;
-  --pico-form-element-background-color: #0d1411; --pico-form-element-border-color: #2a3a31;
-  --pico-form-element-color: #eef3ee; --pico-form-element-focus-color: #c5a059;
-  --pico-h1-color:#eef3ee; --pico-h2-color:#c5a059; --pico-h3-color:#eef3ee;
-  --pico-spacing: .8rem; --pico-border-radius: 12px;
+  --pico-font-family:"IBM Plex Sans Arabic",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --surface-0:#0f1512; --surface-1:#18211c; --surface-2:#0b110e;
+  --line:#2a3a31; --ink:#eef3ee; --ink-2:#9db0a3;
+  --accent:#c5a059; --accent-ink:#10160f; --ok:#4caf7d; --warn:#d9a04a; --bad:#d97474;
+  --fs-1:13px; --fs-2:15px; --fs-3:17px; --fs-4:20px; --fs-5:22px;
+  --sp-1:6px; --sp-2:10px; --sp-3:14px; --sp-4:20px;
+  --r-1:10px; --r-2:14px;
+
+  /* Pico mapping: one accent for every interactive element */
+  --pico-primary:var(--accent); --pico-primary-hover:#d8b56f;
+  --pico-primary-focus:rgba(197,160,89,.25);
+  --pico-primary-background:var(--accent); --pico-primary-border:var(--accent);
+  --pico-primary-hover-background:#d8b56f; --pico-primary-hover-border:#d8b56f;
+  --pico-primary-inverse:var(--accent-ink);
+  --pico-background-color:var(--surface-0); --pico-card-background-color:var(--surface-1);
+  --pico-card-border-color:var(--line); --pico-border-color:var(--line);
+  --pico-color:var(--ink); --pico-muted-color:var(--ink-2);
+  --pico-form-element-background-color:#0d1411; --pico-form-element-border-color:var(--line);
+  --pico-form-element-color:var(--ink); --pico-form-element-focus-color:var(--accent);
+  --pico-h1-color:var(--ink); --pico-h2-color:var(--ink); --pico-h3-color:var(--ink);
+  --pico-border-radius:var(--r-1); --pico-spacing:12px;
 }
-body{background:#0f1512;font-size:1.0625rem}  /* 17px: HIG mobile default for body text */
-:focus-visible{outline:2px solid #c5a059;outline-offset:2px;border-radius:8px}
+/* ---- base ------------------------------------------------------------ */
+html{font-size:100%}
+body{background:var(--surface-0);font-size:var(--fs-3);line-height:1.6;
+  -webkit-text-size-adjust:100%;text-size-adjust:100%}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-1)}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
-header.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 16px;
-  border-bottom:1px solid var(--pico-border-color);background:#0b110e;position:sticky;top:0;z-index:30}
-header.top .brand{font-weight:700;color:#c5a059;margin-inline-end:auto;font-size:15px}
+h1{font-size:var(--fs-5);line-height:1.35;margin:4px 0 var(--sp-3)}
+h2{font-size:var(--fs-2);font-weight:700;color:var(--ink);display:flex;align-items:center;
+  gap:8px;margin:var(--sp-4) 0 var(--sp-2);text-align:start}
+h2::before{content:"";width:3px;height:16px;border-radius:2px;background:var(--accent);flex:0 0 3px}
+/* ---- header ---------------------------------------------------------- */
+header.top{display:flex;gap:var(--sp-2);align-items:center;flex-wrap:wrap;
+  padding:10px 16px;border-bottom:1px solid var(--line);background:var(--surface-2);
+  position:sticky;top:0;z-index:30}
+header.top .brand{font-weight:700;color:var(--accent);margin-inline-end:auto;font-size:var(--fs-2)}
 header.top nav{display:flex;gap:6px;flex-wrap:wrap}
-header.top nav a{padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);
-  background:#18211c;font-size:13px;text-decoration:none}
-header.top nav a.on{background:#3e4d42;border-color:#c5a059;color:#fff}
-.bell{font-size:18px;padding:6px 10px;border-radius:10px;border:1px solid var(--pico-border-color);
-  background:#18211c;display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px}
-.bell.hot{border-color:#c5a059;color:#c5a059;font-weight:700}
-main{padding-bottom:24px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}
-.stat{background:#18211c;border:1px solid #2a3a31;border-radius:12px;padding:12px}
-.stat b{display:block;font-size:22px;color:#c5a059;line-height:1.3}
-.stat span{font-size:12px;color:#9db0a3}
-.card{background:#18211c;border:1px solid #2a3a31;border-radius:12px;padding:12px;margin:10px 0}
-.card pre{white-space:pre-wrap;margin:6px 0;font-family:inherit}
-.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
-  border:1px solid #2a3a31;color:#9db0a3}
-.badge.published{color:#4caf7d;border-color:#4caf7d}
-.badge.failed{color:#d97474;border-color:#d97474}
-.badge.scheduled{color:#d9a04a;border-color:#d9a04a}
-.badge.review{color:#c5a059;border-color:#c5a059}
-.muted{color:#9db0a3;font-size:12px}
-.row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
-.stack{display:flex;flex-direction:column;gap:4px}
-.chart{display:flex;align-items:flex-end;gap:4px;height:90px}
+header.top nav a{display:inline-flex;align-items:center;gap:6px;padding:8px 10px;
+  border-radius:var(--r-1);border:1px solid var(--line);background:var(--surface-1);
+  font-size:var(--fs-1);color:var(--ink-2);text-decoration:none;min-height:44px}
+header.top nav a.on{color:var(--ink);border-color:var(--accent)}
+header.top nav a svg{width:16px;height:16px;flex:0 0 16px}
+.bell{display:inline-flex;align-items:center;justify-content:center;gap:4px;
+  min-width:44px;min-height:44px;border-radius:var(--r-1);border:1px solid var(--line);
+  background:var(--surface-1);color:var(--ink-2);font-size:var(--fs-1);text-decoration:none}
+.bell.hot{color:var(--accent);border-color:var(--accent);font-weight:700}
+/* ---- structure ------------------------------------------------------- */
+main{padding-bottom:var(--sp-4)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:var(--sp-2);margin:var(--sp-2) 0}
+.stat{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-2);
+  padding:var(--sp-3);display:flex;flex-direction:column;gap:2px;min-height:78px;justify-content:center}
+.stat b{font-size:var(--fs-4);line-height:1.2;color:var(--accent);
+  font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-weight:700}
+.stat span{font-size:var(--fs-1);color:var(--ink-2);line-height:1.4}
+.card{background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-2);
+  padding:var(--sp-3);margin:var(--sp-2) 0}
+.card pre{white-space:pre-wrap;margin:6px 0;font-family:inherit;font-size:var(--fs-2);color:var(--ink)}
+.badge{display:inline-block;font-size:var(--fs-1);line-height:1.6;padding:2px 10px;
+  border-radius:999px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
+.badge.published{color:var(--ok);border-color:var(--ok)}
+.badge.failed{color:var(--bad);border-color:var(--bad)}
+.badge.scheduled{color:var(--warn);border-color:var(--warn)}
+.badge.review{color:var(--accent);border-color:var(--accent)}
+.muted{color:var(--ink-2);font-size:var(--fs-1);font-variant-numeric:tabular-nums}
+.row{display:flex;justify-content:space-between;gap:var(--sp-2);align-items:flex-start;flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:4px;min-width:0}
+.chart{display:flex;align-items:flex-end;gap:4px;height:90px;margin-top:6px}
 .chart .bar{flex:1;background:#0d1411;border-radius:4px;display:flex;align-items:flex-end;min-width:6px}
-.chart .bar i{display:block;width:100%;background:linear-gradient(180deg,#c5a059,#3e4d42);border-radius:4px}
+.chart .bar i{display:block;width:100%;background:linear-gradient(180deg,var(--accent),#3e4d42);border-radius:4px}
 .notif{display:flex;gap:10px;align-items:flex-start}
-.notif .dot{width:8px;height:8px;border-radius:50%;background:#c5a059;margin-top:6px;flex:0 0 8px}
-.notif.read{opacity:.55}
-table td{padding:6px 4px;border-bottom:1px solid #2a3a31;font-size:13px}
+.notif .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);margin-top:8px;flex:0 0 8px}
+.notif.read{opacity:.6}
+table{width:100%}
+table td{padding:8px 4px;border-bottom:1px solid var(--line);font-size:var(--fs-1)}
+button,input,select,textarea{font-size:var(--fs-2)}
+button{min-height:44px;padding-inline:16px;font-weight:600}
+/* ---- compact screens ------------------------------------------------- */
 @media (max-width:640px){
   header.top{padding:8px 12px}
-  header.top nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-around;
-    background:#0b110e;border-top:1px solid #2a3a31;padding:6px 4px;
-    padding-bottom:calc(6px + env(safe-area-inset-bottom));z-index:40;gap:0}
-  header.top nav a{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
-    font-size:12px;padding:6px 2px;border:none;background:transparent;min-height:44px}
-  header.top nav a.on{background:transparent;color:#c5a059;font-weight:700}
-  main{padding-bottom:calc(86px + env(safe-area-inset-bottom)) !important}
+  header.top .brand{font-size:var(--fs-1);color:var(--ink-2);font-weight:600}
+  header.top nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-between;
+    background:var(--surface-2);border-top:1px solid var(--line);padding:4px 6px;
+    padding-bottom:calc(4px + env(safe-area-inset-bottom));z-index:40;gap:0}
+  header.top nav a{flex:1;flex-direction:column;gap:3px;border:none;background:transparent;
+    font-size:11px;color:var(--ink-2);padding:6px 2px;min-height:52px;justify-content:center;
+    border-top:2px solid transparent;border-radius:0}
+  header.top nav a svg{width:20px;height:20px;flex:0 0 20px}
+  header.top nav a.on{color:var(--accent);border-top-color:var(--accent);font-weight:700}
+  main{padding-bottom:calc(96px + env(safe-area-inset-bottom)) !important}
+  h1{font-size:var(--fs-4)}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-  .row{flex-direction:column;align-items:stretch}
-  button,input,select{min-height:44px}
+  .stat{min-height:74px;padding:10px 12px}
+  .card{padding:12px}
+  .row{flex-direction:column;align-items:flex-start}
+  form{flex-direction:column;align-items:stretch}
+  form button{width:100%}
+  .row form{flex-direction:row}
+  .row form button{width:auto}
 }
 """
 
@@ -106,6 +148,26 @@ def fmt_ts(ts) -> str:
     return local.strftime("%Y-%m-%d %H:%M")
 
 
+def write_stylesheet(directory: str) -> str:
+    """Publish the CSS as a cacheable static file (and its .gz twin)."""
+    import gzip
+    import os
+
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, "app.css")
+    data = CSS.encode("utf-8")
+    current = b""
+    if os.path.exists(path):
+        with open(path, "rb") as fh:
+            current = fh.read()
+    if current != data:
+        with open(path, "wb") as fh:
+            fh.write(data)
+        with open(path + ".gz", "wb") as fh:
+            fh.write(gzip.compress(data, 9))
+    return path
+
+
 _UNREAD = 0
 
 
@@ -115,6 +177,13 @@ def set_unread(count: int) -> None:
 
 
 def page(title: str, body: str, active: str = "") -> bytes:
+    icons = {
+        "today": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>',
+        "content": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M10 13h6M10 17h6"/></svg>',
+        "contacts": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c1.5-3.5 4-5 7-5s5.5 1.5 7 5"/></svg>',
+        "deals": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.4"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/></svg>',
+        "channel": '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 10v4a2 2 0 0 0 2 2h2l6 4V4L8 8H6a2 2 0 0 0-2 2z"/><path d="M18 9a4 4 0 0 1 0 6"/></svg>',
+    }
     nav = [
         ("/ui", "اليوم", "today"),
         ("/ui/content", "المحتوى", "content"),
@@ -123,11 +192,14 @@ def page(title: str, body: str, active: str = "") -> bytes:
         ("/ui/channel", "القناة", "channel"),
     ]
     links = "".join(
-        f'<a href="{href}" class="{"on" if key == active else ""}">{label}</a>'
+        f'<a href="{href}" class="{"on" if key == active else ""}"'
+        f'{" aria-current=\"page\"" if key == active else ""}>'
+        f'{icons.get(key, "")}<span>{label}</span></a>'
         for href, label, key in nav
     )
     bell = (f'<a class="bell{" hot" if _UNREAD else ""}" href="/ui/notifications" '
-            f'aria-label="الإشعارات">🔔{_UNREAD if _UNREAD else ""}</a>')
+            f'aria-label="الإشعارات ({_UNREAD} غير مقروء)">🔔'
+            f'{_UNREAD if _UNREAD else ""}</a>')
     doc = f"""<!doctype html>
 <html lang="ar" dir="rtl" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -135,7 +207,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <meta name="theme-color" content="#0f1512">
 <link rel="manifest" href="/ui/manifest.webmanifest">
 <link rel="stylesheet" href="/static/pico.min.css">
-<style>{CSS}</style></head>
+<link rel="stylesheet" href="/static/app.css"></head>
 <body dir="rtl"><header class="top"><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
 <main class="container">{body}</main></body></html>"""
     return doc.encode("utf-8")

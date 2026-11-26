@@ -30,6 +30,8 @@ from service import Bridge, to_epoch
 log = logging.getLogger("bridge.http")
 MAX_BODY = 1_048_576  # 1 MiB
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+# Writable cache for generated assets (the code dir is mounted read-only).
+CACHE_DIR = os.environ.get("STATIC_CACHE", "/var/crm/static")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -116,7 +118,9 @@ class Handler(BaseHTTPRequestHandler):
     def _static(self, name: str):
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", name or ""):
             return self._send(404, {"error": "not found"})
-        path = os.path.join(STATIC_DIR, name)
+        path = os.path.join(CACHE_DIR, name)
+        if not os.path.isfile(path):
+            path = os.path.join(STATIC_DIR, name)
         if not os.path.isfile(path):
             return self._send(404, {"error": "not found"})
         ctype = "text/css; charset=utf-8" if name.endswith(".css") else "application/octet-stream"
@@ -173,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._send_html(200, ui.notifications_page(crm.notifications(60)))
         if path == "/ui/content":
             status = (query.get("status") or [""])[0]
-            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 50), status))
+            return self._send_html(200, ui.content_page(crm.list_posts(status or None, 30), status))
         if path == "/ui/contacts":
             q = (query.get("q") or [""])[0]
             return self._send_html(200, ui.contacts_page(crm.list_contacts(q or None)))
@@ -341,6 +345,10 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stdout,
     )
+    try:
+        ui.write_stylesheet(CACHE_DIR)
+    except OSError as exc:  # read-only FS: keep serving the vendored copy
+        log.warning("stylesheet cache unavailable: %s", exc)
     bridge = Bridge(cfg)
     server = make_server(cfg, bridge)
     bridge.start_workers()
