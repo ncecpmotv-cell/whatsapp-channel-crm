@@ -23,7 +23,7 @@ class GowaClient:
         self.device_id = device_id
         self.timeout = timeout
 
-    def _call(self, method: str, path: str, payload=None):
+    def _call(self, method: str, path: str, payload=None, timeout: int | None = None):
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
         req = urllib.request.Request(self.base_url + path, data=data, method=method)
         req.add_header("X-Device-Id", self.device_id)
@@ -31,7 +31,7 @@ class GowaClient:
         if data is not None:
             req.add_header("Content-Type", "application/json")
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout or self.timeout) as resp:
                 body = resp.read().decode("utf-8", "replace")
         except urllib.error.HTTPError as exc:
             raise GowaError(exc.code, exc.read().decode("utf-8", "replace"), path) from exc
@@ -71,8 +71,8 @@ class GowaClient:
             f"&after={after}&count={count}",
         )
 
-    def device_status(self):
-        return self._call("GET", f"/devices/{self.device_id}/status")
+    def device_status(self, timeout: int | None = 3):
+        return self._call("GET", f"/devices/{self.device_id}/status", timeout=timeout)
 
 
 def verify_signature(secret: str, raw_body: bytes, header_value: str | None) -> bool:

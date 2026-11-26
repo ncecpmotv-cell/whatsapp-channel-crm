@@ -16,8 +16,10 @@ ENVF="$BASE/.env"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 RETIRE=0
 NO_START=0
+DELETE_ESPO=0
 for arg in "$@"; do
   [ "$arg" = "--retire-espocrm" ] && RETIRE=1
+  [ "$arg" = "--delete-espocrm" ] && { RETIRE=1; DELETE_ESPO=1; }
   [ "$arg" = "--no-start" ] && NO_START=1
 done
 
@@ -51,6 +53,37 @@ if [ "$RETIRE" = "1" ]; then
   done
 fi
 
+if [ "$DELETE_ESPO" = "1" ]; then
+  echo "== permanent delete: EspoCRM + MariaDB (+ nginx config) =="
+  mkdir -p "$BASE/var"
+  DUMP="$BASE/var/espocrm-dump-$(date +%Y%m%d-%H%M).sql.gz"
+  if command -v mysqldump >/dev/null 2>&1 || command -v mariadb-dump >/dev/null 2>&1; then
+    DUMPBIN="$(command -v mariadb-dump || command -v mysqldump)"
+    if "$DUMPBIN" -u root espocrm 2>/dev/null | gzip > "$DUMP" && [ -s "$DUMP" ]; then
+      echo "db dump kept at $DUMP"
+    else
+      echo "WARNING: dump failed — nothing deleted"
+      exit 1
+    fi
+  else
+    echo "no dump tool found; copying the raw datadir instead"
+    tar czf "$BASE/var/mariadb-datadir-$(date +%Y%m%d-%H%M).tar.gz" \
+      -C "${PREFIX:-/data/data/com.termux/files/usr}/var/lib" mysql 2>/dev/null || true
+  fi
+  for svc in espocrm nginx mariadb; do sv down "$svc" 2>/dev/null || true; done
+  sleep 1
+  ESPO_DIR="${ESPO_DIR:-$TERMUX_HOME/espocrm}"
+  [ -d "$TERMUX_HOME/sanad/espocrm" ] && ESPO_DIR="$TERMUX_HOME/sanad/espocrm"
+  rm -rf "$ESPO_DIR" "$TERMUX_HOME/sanad/espocrm" "$TERMUX_HOME/espocrm"
+  rm -rf "${PREFIX:-/data/data/com.termux/files/usr}/var/service/espocrm" \
+         "${PREFIX:-/data/data/com.termux/files/usr}/var/service/nginx" \
+         "${PREFIX:-/data/data/com.termux/files/usr}/var/service/mariadb"
+  rm -rf "${PREFIX:-/data/data/com.termux/files/usr}/var/lib/mysql"
+  rm -f "${PREFIX:-/data/data/com.termux/files/usr}/etc/my.cnf.d/zz-low-ram.cnf"
+  ( crontab -l 2>/dev/null | grep -v 'espocrm/cron.php' ) | crontab - 2>/dev/null || true
+  echo "deleted. kept: $DUMP (delete it yourself once you are sure)"
+fi
+
 if [ "$NO_START" = "1" ]; then
   echo "== skip restart (--no-start) =="
   ls "$LIVE" | tr '\n' ' '; echo
@@ -66,6 +99,15 @@ sv restart bridge 2>/dev/null || {
   disown 2>/dev/null || true
 }
 sleep 3
+
+echo "== tailscale node =="
+if command -v tailscale >/dev/null 2>&1; then
+  tailscale serve --bg --https=8444 "http://127.0.0.1:${BRIDGE_PORT}" 2>&1 | tail -3 \
+    || echo "tailscale serve failed (is Tailscale up and HTTPS enabled?)"
+  tailscale serve status 2>/dev/null | head -6
+else
+  echo "tailscale CLI not found; skipping"
+fi
 
 echo "== verify =="
 TOKEN="$(grep '^BRIDGE_TOKEN=' "$ENVF" | cut -d= -f2-)"

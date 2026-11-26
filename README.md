@@ -31,6 +31,17 @@ GOWA :3000 ──webhook──────┘        └── واجهة ويب
 
 شاشات: اليوم · المحتوى · العملاء · الفرص · القياسات. PWA عبر `/ui/manifest.webmanifest`.
 
+## الوصول عبر Tailscale
+
+النظام عقدة داخل الـtailnet (TLS من Let's Encrypt)، لا منفذ مكشوف للإنترنت:
+
+```bash
+tailscale serve --bg --https=8444 http://127.0.0.1:8085
+# https://<hostname>.<tailnet>.ts.net:8444/
+```
+
+على السيرفر (معاينة): `https://almahdiya-platform.tail89e761.ts.net:8444/`.
+
 ## التركيب على الجوال
 
 ```bash
