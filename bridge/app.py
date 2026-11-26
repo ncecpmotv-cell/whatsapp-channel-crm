@@ -236,6 +236,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _ui_get(self, path: str, query: dict):
         ui.set_flash(self.FLASH.get((query.get("ok") or [""])[0], ""))
+        ui.set_header_action("")
         crm = self.bridge.crm
         ui.TZ_OFFSET = self.bridge.cfg.tz_offset
         ui.set_unread(crm.unread_notifications())

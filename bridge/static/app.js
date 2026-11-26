@@ -16,23 +16,16 @@
   }
 
   /* ---------- FAB -> composer ---------- */
-  const fab = document.getElementById("fab");
   const composer = document.getElementById("newContent");
-  if (fab && composer) {
-    fab.hidden = false;
-    fab.addEventListener("click", () => {
-      composer.open = true;
-      composer.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
-      const first = composer.querySelector("input, textarea, select");
-      if (first) setTimeout(() => first.focus({ preventScroll: true }), 200);
-    });
-  }
-
-  document.querySelectorAll('a[href="#newContent"]').forEach((a) =>
-    a.addEventListener("click", (e) => {
-      e.preventDefault();
-      if (composer) { composer.open = true; composer.scrollIntoView({ behavior: reduce ? "auto" : "smooth" }); }
-    }));
+  const openComposer = () => {
+    if (!composer) return;
+    composer.open = true;
+    composer.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    const first = composer.querySelector("input, textarea, select");
+    if (first) setTimeout(() => first.focus({ preventScroll: true }), 200);
+  };
+  document.querySelectorAll("[data-composer]").forEach((el) =>
+    el.addEventListener("click", (e) => { e.preventDefault(); openComposer(); }));
 
   /* ---------- skeleton overlay on navigation / form submit ---------- */
   const skel = document.getElementById("skel");

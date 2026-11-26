@@ -118,14 +118,14 @@ button{min-height:44px;padding-inline:16px;font-weight:600}
   header.top{padding:8px 12px}
   header.top .brand{font-size:var(--fs-1);color:var(--ink-2);font-weight:600}
   header.top nav{position:fixed;inset-inline:0;bottom:0;display:flex;justify-content:space-between;
-    background:var(--surface-2);border-top:1px solid var(--line);padding:4px 6px;
-    padding-bottom:calc(4px + env(safe-area-inset-bottom));z-index:40;gap:0}
-  header.top nav a{flex:1;flex-direction:column;gap:3px;border:none;background:transparent;
-    font-size:11px;color:var(--ink-2);padding:6px 2px;min-height:52px;justify-content:center;
+    background:var(--surface-2);border-top:1px solid var(--line);padding:2px 4px;
+    padding-bottom:calc(2px + env(safe-area-inset-bottom));z-index:40;gap:0}
+  header.top nav a{flex:1;flex-direction:column;gap:1px;border:none;background:transparent;
+    font-size:10.5px;color:var(--ink-2);padding:4px 2px;min-height:46px;justify-content:center;
     border-top:2px solid transparent;border-radius:0}
-  header.top nav a svg{width:20px;height:20px;flex:0 0 20px}
+  header.top nav a svg{width:18px;height:18px;flex:0 0 18px}
   header.top nav a.on{color:var(--accent);border-top-color:var(--accent);font-weight:700}
-  main{padding-bottom:calc(96px + env(safe-area-inset-bottom)) !important}
+  main{padding-bottom:calc(150px + env(safe-area-inset-bottom)) !important}
   h1{font-size:var(--fs-4)}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
   .stat{min-height:74px;padding:10px 12px}
@@ -149,22 +149,22 @@ details.panel>.body{padding:0 14px 14px}
 details.panel[open]>summary{border-bottom:1px solid var(--line)}
 /* ---- filter chips ----------------------------------------------------- */
 .chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 10px}
-.chips a{display:inline-flex;align-items:center;min-height:38px;padding:0 12px;
+.chips a{display:inline-flex;align-items:center;min-height:34px;padding:0 10px;
   border-radius:999px;border:1px solid var(--line);background:var(--surface-1);color:var(--ink-2);
   font-size:var(--fs-1);text-decoration:none;white-space:nowrap;
   transition:background .15s ease,color .15s ease,border-color .15s ease,transform .12s ease}
 .chips a.on{background:rgba(197,160,89,.12);border-color:var(--accent);color:var(--accent);font-weight:700}
 .chips a:active{transform:scale(.97)}
-/* ---- FAB -------------------------------------------------------------- */
-.fab{position:fixed;inset-inline-start:16px;bottom:calc(84px + env(safe-area-inset-bottom));
-  z-index:45;width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);
-  color:var(--accent-ink);box-shadow:0 6px 18px rgba(0,0,0,.45);display:flex;align-items:center;
-  justify-content:center;font-size:26px;line-height:1;padding:0;
-  transition:transform .15s ease}
-.fab:active{transform:scale(.94)}
-@media (min-width:641px){.fab{inset-inline-start:auto;inset-inline-end:24px;bottom:24px}}
+/* ---- header primary action (replaces the floating button) --------------- */
+.head-act{display:none;align-items:center;justify-content:center;width:44px;height:44px;
+  border-radius:12px;border:1px solid var(--accent);color:var(--accent);
+  font-size:24px;line-height:1;text-decoration:none;background:rgba(197,160,89,.10);
+  padding:0 0 2px}
+.head-act:hover{background:rgba(197,160,89,.18)}
+@media (max-width:640px){.head-act{display:inline-flex}}
+@media (min-width:641px){.head-act{display:inline-flex;width:40px;height:40px;font-size:22px}}
 /* ---- toast ------------------------------------------------------------ */
-.toast{position:fixed;inset-inline:12px;bottom:calc(152px + env(safe-area-inset-bottom));z-index:60;
+.toast{position:fixed;inset-inline:12px;bottom:calc(132px + env(safe-area-inset-bottom));z-index:60;
   display:flex;align-items:center;gap:10px;max-width:520px;margin-inline:auto;padding:12px 14px;
   border-radius:var(--r-2);background:#1d2a23;border:1px solid var(--accent);color:var(--ink);
   font-size:var(--fs-2);box-shadow:0 10px 30px rgba(0,0,0,.5);
@@ -206,7 +206,7 @@ details.panel[open]>summary{border-bottom:1px solid var(--line)}
 .post-actions form{display:flex;flex-direction:column;gap:6px;margin:0;min-width:0}
 .post-actions form:has(input[type=datetime-local]){grid-column:span 2}
 .post-actions input[type=datetime-local]{font-size:12px;min-height:40px;padding:4px 6px;margin:0;width:100%}
-.post-actions button{width:100%;font-size:12.5px;padding-inline:6px;min-height:42px;white-space:nowrap}
+.post-actions button{width:100%;font-size:12px;padding-inline:4px;min-height:38px;white-space:nowrap}
 /* ---- buttons ---------------------------------------------------------- */
 button.ghost,a.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
 button.ghost:hover,a.ghost:hover{background:var(--surface-2);border-color:var(--accent)}
@@ -279,6 +279,17 @@ def flash_text() -> str:
     return getattr(_FLASH, "msg", "")
 
 
+_HEADER = threading.local()
+
+
+def set_header_action(markup: str) -> None:
+    _HEADER.action = markup
+
+
+def header_action() -> str:
+    return getattr(_HEADER, "action", "")
+
+
 def set_unread(count: int) -> None:
     global _UNREAD
     _UNREAD = max(0, int(count or 0))
@@ -309,6 +320,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
             f'aria-label="🔔 الإشعارات {_UNREAD if _UNREAD else ""}">🔔'
             f'{_UNREAD if _UNREAD else ""}</a>')
     flash = flash_text()
+    head_act = header_action()
     doc = f"""<!doctype html>
 <html lang="ar" dir="rtl" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -326,7 +338,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
   <div class="bar" style="width:45%"></div><div class="card-s"></div><div class="card-s"></div><div class="card-s"></div>
   <div class="bar" style="width:65%"></div><div class="bar" style="width:35%"></div>
 </div>
-<header class="top"><span class="brand">CRM · قناة واتساب</span>{bell}<nav>{links}</nav></header>
+<header class="top"><span class="brand">CRM · قناة واتساب</span>{head_act}{bell}<nav>{links}</nav></header>
 <main class="container">{body}</main>
 <script src="/static/app.js" defer></script></body></html>"""
     return doc.encode("utf-8")
@@ -407,6 +419,8 @@ syncType();
 
 def content_page(posts: list[dict], status: str = "", error: str = "",
                  page_no: int = 1, pages: int = 1) -> bytes:
+    set_header_action('<a class="head-act" href="#newContent" data-composer '
+                      'aria-label="محتوى جديد" aria-controls="newContent">+</a>')
     query = f"status={status}&" if status else ""
     chip_items = [("", "الكل")] + [(k, v) for k, v in STAGES_AR.items() if k != "publishing"]
     filters = "".join(
@@ -504,7 +518,7 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
 
     empty_state = ('<div class="empty"><b>لا محتوى بعد</b>'
                    '<p>ابدأ بأول فكرة أو مسودة، وسيظهر هنا.</p>'
-                   '<a role="button" href="#newContent" id="emptyCta">إنشاء محتوى</a></div>')
+                   '<a role="button" href="#newContent" data-composer>إنشاء محتوى</a></div>')
     body = f"""
 <h1>المحتوى</h1>
 {banner}
@@ -538,7 +552,6 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
 <h2>العناصر <span class="muted">— صفحة {page_no}</span></h2>
 {''.join(rows) or empty_state}
 {pager}
-<button class="fab" id="fab" hidden aria-label="محتوى جديد" aria-controls="newContent">+</button>
 {TYPE_SCRIPT}
 """
     return page("المحتوى", body, "content")
