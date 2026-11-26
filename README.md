@@ -76,6 +76,14 @@ bash scripts/upgrade-to-crm.sh --retire-espocrm # ويوقف EspoCRM/MariaDB/ngi
 السكربت: نسخة احتياطية → نسخ `bridge/*.py` → ترحيل `.env` → إعادة تشغيل → فحص صحة.
 للتجربة بدون تشغيل: `--no-start`.
 
+## التدقيق
+
+```bash
+BASE=http://127.0.0.1:8085 bash scripts/audit.sh   # 17 فحصًا: ترجمة، اختبارات، أسرار، CSRF، ترويسات، أصول
+```
+
+التقرير الكامل ونتائج الإصلاح: `docs/AUDIT.md` (نتيجة آخر تشغيل: 17/17 · Lighthouse 100/100/100/100).
+
 ## التطوير والاختبار
 
 ```bash

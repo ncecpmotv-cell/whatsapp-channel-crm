@@ -75,7 +75,27 @@
     }, { passive: true });
   }
 
+  /* ---------- composer: show only the fields the type needs ---------- */
+  const ctype = document.getElementById("ctype");
+  const mediaRow = document.getElementById("mediaRow");
+  const linkRow = document.getElementById("linkRow");
+  const pollRow = document.getElementById("pollRow");
+  if (ctype && mediaRow && linkRow && pollRow) {
+    const syncType = () => {
+      const v = ctype.value;
+      mediaRow.hidden = !["image", "video", "audio", "file"].includes(v);
+      linkRow.hidden = v !== "link";
+      pollRow.hidden = v !== "poll";
+    };
+    ctype.addEventListener("change", syncType);
+    syncType();
+  }
+
   /* ---------- chips: keep active chip in view ---------- */
   const activeChip = document.querySelector(".chips a.on");
-  if (activeChip) activeChip.scrollIntoView({ block: "nearest", inline: "center" });
+  if (activeChip) {
+    const reveal = () => activeChip.scrollIntoView({ block: "nearest", inline: "center" });
+    if ("requestIdleCallback" in window) requestIdleCallback(reveal, { timeout: 400 });
+    else setTimeout(reveal, 60);
+  }
 })();

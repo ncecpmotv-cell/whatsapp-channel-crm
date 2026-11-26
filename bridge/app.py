@@ -32,11 +32,17 @@ from mcp import McpServer, new_session_id
 from service import Bridge, to_epoch
 
 log = logging.getLogger("bridge.http")
-MAX_BODY = 1_048_576  # 1 MiB
+MAX_BODY = 26 * 1024 * 1024  # 26 MiB: 20 MiB media + multipart overhead
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # Writable cache for generated assets (the code dir is mounted read-only).
 CACHE_DIR = os.environ.get("STATIC_CACHE", "/var/crm/static")
 MEDIA_DIR = os.environ.get("MEDIA_DIR", "/var/crm/media")
+ALLOWED_EXT = {
+    "image": {".jpg", ".jpeg", ".png", ".webp", ".gif"},
+    "video": {".mp4", ".mov", ".webm"},
+    "audio": {".mp3", ".ogg", ".m4a", ".opus", ".wav"},
+    "file": {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".zip"},
+}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -67,6 +73,14 @@ class Handler(BaseHTTPRequestHandler):
             body = gzip.compress(body, 6)
             extra["Content-Encoding"] = "gzip"
             extra.setdefault("Vary", "Accept-Encoding")
+        extra.setdefault("X-Content-Type-Options", "nosniff")
+        extra.setdefault("Referrer-Policy", "no-referrer")
+        extra.setdefault("X-Frame-Options", "DENY")
+        extra.setdefault("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+        if content_type.startswith("text/html"):
+            extra.setdefault("Content-Security-Policy",
+                             "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+                             "script-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
@@ -121,6 +135,24 @@ class Handler(BaseHTTPRequestHandler):
             return b""
         return self.rfile.read(length)
 
+    def _too_large(self) -> bool:
+        try:
+            return int(self.headers.get("Content-Length") or 0) > MAX_BODY
+        except ValueError:
+            return False
+
+    def _same_origin(self) -> bool:
+        """Blocks cross-site form posts (Basic credentials ride along)."""
+        site = (self.headers.get("Sec-Fetch-Site") or "").lower()
+        if site and site not in ("same-origin", "none"):
+            return False
+        origin = self.headers.get("Origin")
+        if origin:
+            host = (self.headers.get("Host") or "").lower()
+            if urlparse(origin).netloc.lower() != host:
+                return False
+        return True
+
     def log_message(self, fmt, *args):
         log.info("%s - %s", self.address_string(), fmt % args)
 
@@ -144,10 +176,7 @@ class Handler(BaseHTTPRequestHandler):
                     return True
             except Exception:  # noqa: BLE001
                 return False
-        # A token query parameter keeps curl usage simple on a phone.
-        query = parse_qs(urlparse(self.path).query)
-        supplied = (query.get("token") or [""])[0]
-        return bool(token) and hmac.compare_digest(token, supplied)
+        return False
 
     def _require_basic(self) -> bool:
         if self._basic_ok():
@@ -191,8 +220,11 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
 
         if path == "/health":
-            return self._send(200, self.bridge.health())
+            return self._send(200, {"ok": self.bridge.crm.ping(),
+                                    "crm": self.bridge.crm.ping()})
         if path == "/status":
+            if not self._bearer_ok():
+                return self._send(401, {"error": "unauthorized"})
             return self._send(200, {"stats": self.bridge.stats,
                                     "queue": self.bridge.store.pending_count(),
                                     "crm": self.bridge.crm.stats(),
@@ -283,7 +315,11 @@ class Handler(BaseHTTPRequestHandler):
                 crm.get_channel_info(jid), crm.channel_summary(30),
                 crm.daily_series(14), crm.list_posts("published", 20)))
         if path == "/ui/metrics":
-            days = int((query.get("days") or ["7"])[0] or 7)
+            try:
+                days = int((query.get("days") or ["7"])[0] or 7)
+            except ValueError:
+                days = 7
+            days = max(1, min(days, 365))
             return self._send_html(200, ui.metrics_page(crm.channel_metrics(days)))
         if path == "/ui/manifest.webmanifest":
             return self._send_bytes(200, json.dumps(ui.MANIFEST, ensure_ascii=False).encode("utf-8"),
@@ -293,6 +329,8 @@ class Handler(BaseHTTPRequestHandler):
     # -- POST --------------------------------------------------------------
     def do_POST(self):
         path = urlparse(self.path).path
+        if self._too_large():
+            return self._send(413, {"error": "payload too large (max 20 MiB media)"})
         raw = self._read_body()
 
         if path == "/webhook/gowa":
@@ -357,6 +395,8 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/ui"):
             if not self._require_basic():
                 return None
+            if not self._same_origin():
+                return self._send(403, {"error": "cross-site request rejected"})
             return self._ui_post(path, raw)
 
         return self._send(404, {"error": "not found"})
@@ -394,7 +434,9 @@ class Handler(BaseHTTPRequestHandler):
             filename, payload, _mime = upload
             if len(payload) > 20 * 1024 * 1024:
                 return self._redirect("/ui/content?error=media_too_big")
-            ext = os.path.splitext(filename or "")[1].lower()[:8]
+            ext = os.path.splitext(filename or "")[1].lower()
+            if ext not in ALLOWED_EXT.get(kind, set()):
+                return self._redirect("/ui/content?error=media_type")
             os.makedirs(MEDIA_DIR, exist_ok=True)
             media_path = os.path.join(MEDIA_DIR, uuid.uuid4().hex[:12] + ext)
             with open(media_path, "wb") as fh:

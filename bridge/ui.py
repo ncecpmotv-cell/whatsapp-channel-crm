@@ -356,6 +356,7 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>{esc(title)} · CRM</title>
 <meta name="theme-color" content="#0f1512">
+<meta name="description" content="إدارة محتوى قناة واتساب والعملاء والفرص من الجوال: مسودة → معتمد ومجدول → منشور، مع قياسات القناة.">
 <link rel="manifest" href="/ui/manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f1512'/%3E%3Ccircle cx='16' cy='16' r='7' fill='none' stroke='%23c5a059' stroke-width='2.5'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/static/pico.min.css">
@@ -434,19 +435,6 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
 
 
 # -------------------------------------------------------------------- content
-TYPE_SCRIPT = """<script>
-const sel = document.getElementById('ctype');
-function syncType() {
-  const v = sel.value;
-  document.getElementById('mediaRow').hidden = !['image','video','audio','file'].includes(v);
-  document.getElementById('linkRow').hidden = v !== 'link';
-  document.getElementById('pollRow').hidden = v !== 'poll';
-}
-sel.addEventListener('change', syncType);
-syncType();
-</script>"""
-
-
 def content_page(posts: list[dict], status: str = "", error: str = "",
                  page_no: int = 1, pages: int = 1) -> bytes:
     set_header_action('<a class="head-act" href="#newContent" data-composer '
@@ -463,6 +451,7 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
         "link": "أدخل رابطًا يبدأ بـ http:// أو https://",
         "media_required": "اختر ملفًا للنوع المحدد.",
         "media_too_big": "الملف أكبر من 20 ميغابايت.",
+        "media_type": "نوع الملف غير مدعوم لهذا النوع (صور: jpg/png/webp · فيديو: mp4/mov · صوت: mp3/ogg · ملفات: pdf/office/zip).",
     }
     banner = ""
     if error:
@@ -584,7 +573,6 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
 <h2>العناصر <span class="muted">— صفحة {page_no}</span></h2>
 {''.join(rows) or empty_state}
 {pager}
-{TYPE_SCRIPT}
 """
     return page("المحتوى", body, "content")
 
@@ -872,8 +860,8 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
   <form method="post" action="/ui/channel/refresh"><button class="ghost">تحديث بيانات القناة</button></form>
 </div>
 <div class="grid">
-  <div class="stat"><b>{esc(subs if subs is not None else "—")}</b><span>مشتركون</span></div>
-  <div class="stat"><b>{esc(summary.get("count", 0))}</b><span>منشور منشور</span></div>
+  <div class="stat"><b>{esc(subs if subs is not None else "—")}</b><span>{"مشترك" if subs == 1 else "مشتركون"}</span></div>
+  <div class="stat"><b>{esc(summary.get("count", 0))}</b><span>منشور</span></div>
   <div class="stat"><b>{esc(summary.get("views", 0))}</b><span>إجمالي المشاهدات</span></div>
   <div class="stat"><b>{esc(summary.get("avg_views", 0))}</b><span>متوسط المشاهدات/منشور</span></div>
   <div class="stat"><b>{esc(summary.get("forwards", 0))}</b><span>إعادة تمرير</span></div>
