@@ -12,6 +12,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0004](0004-one-shot-installer.md) | One-command installer (GOWA + PicoClaw + CRM) | shipped | R-04 |
 | [0005](0005-content-strategist-skill.md) | Content Strategist skill for PicoClaw | shipped | R-05 |
 | [0006](0006-phone-start-script.md) | Phone start script (idempotent, ordered) | shipped | R-15 |
+| [0007](0007-stack-on-the-phone.md) | The stack moved to the phone | shipped | R-16 |
 
 ## Adding one
 

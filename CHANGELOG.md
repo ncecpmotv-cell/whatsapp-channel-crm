@@ -6,11 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [3.0.0] — 2026-11-27
+
+### Changed
+
+- **The runtime is the phone.** GOWA, the CRM/MCP server and PicoClaw now run as runit
+  services (`gowa`, `crm`, `picoclaw`); the server containers are retired
+  (`docker compose down`, volumes kept for rollback).
+- WhatsApp session migrated by copying `storages/` — same JID, no QR scan.
+- `scripts/phone-start.sh` replaces the earlier launchers: ordered start with health waits,
+  `status`/`stop`/`restart`, and the retired EspoCRM units kept down.
+
+### Fixed
+
+- PicoClaw on Termux: config paths pointed at `/data/workspace`; rewritten to the Termux home.
+- PicoClaw's MCP entry pointed at the container port 8086; now 8085.
+
 ## [2.1.2] — 2026-11-27
 
 ### Changed
 
-- The phone is infrastructure-only by default: `scripts/termux-infra-start.sh` starts
+- The phone is infrastructure-only by default: `scripts/termux-infra-start.sh` (removed in
+  3.0.0, superseded by `scripts/phone-start.sh`) starts
   sshd, the reverse tunnel, tailscale and cron, and keeps the legacy EspoCRM/GOWA stack
   down (`--legacy` opts in). Boot script delegates to it, so there is one list of services.
 - Disabled on the device: `gowa`, `bridge`, `mariadb`, `php-fpm`, `nginx` (down markers),
@@ -20,7 +37,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
-- Reboot recovery on the phone: `scripts/termux-start.sh` replaces a naive `start.sh`.
+- Reboot recovery on the phone: `scripts/termux-start.sh` (removed in 3.0.0, superseded by
+  `scripts/phone-start.sh`) replaces a naive `start.sh`.
   It is idempotent, starts GOWA → CRM → PicoClaw with health waits, refuses to start a
   local gateway when the config points at a remote one, prints a status line per service
   and exits non-zero when something is down. `sh` invocations re-exec under bash.

@@ -15,7 +15,8 @@ The documentation is the contract of this repository: **every behaviour has a pa
 | Work on the code | [`DEVELOPMENT.md`](DEVELOPMENT.md) |
 | Fix something broken | [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) |
 | Keep it alive on Android | [`ANDROID-BACKGROUND.md`](ANDROID-BACKGROUND.md) |
-| Start/stop it on the phone after a reboot | [`termux-start.sh`](../scripts/termux-start.sh) · [`termux-infra-start.sh`](../scripts/termux-infra-start.sh) · [0006](features/0006-phone-start-script.md) |
+| Start/stop the phone stack | [`phone-start.sh`](../scripts/phone-start.sh) · [0006](features/0006-phone-start-script.md) |
+| Where it runs and why | [0007 — the stack on the phone](features/0007-stack-on-the-phone.md) |
 | Use free tiers for search/images | [`INTEGRATIONS-FREE.md`](INTEGRATIONS-FREE.md) |
 | See the PicoClaw config we ship | [`PICOCLAW.md`](PICOCLAW.md) |
 | Know what is planned next | [`../ROADMAP.md`](../ROADMAP.md) |

@@ -1,77 +1,65 @@
-# 0006 — Phone start script: idempotent, ordered, honest
+# 0006 — Phone start script: ordered, honest, runit-native
 
 - **Status:** shipped
 - **Owner:** @ncecpmotv-cell
-- **Shipped in:** v2.1.1
+- **Shipped in:** v2.1.1 (pidfile variant) · v3.0.0 (runit variant)
 - **Roadmap:** R-15
-- **Files:** `scripts/termux-start.sh`, `scripts/termux-infra-start.sh`, `docs/ANDROID-BACKGROUND.md`
+- **Files:** `scripts/phone-start.sh`, `docs/ANDROID-BACKGROUND.md`
 
 ## Why
 
 After an Android reboot the owner ran `sh start.sh` and had no way to know whether the stack
-came back: the old script started processes without checking ports, could spawn a second
-GOWA (which logs the other session out), and printed nothing that distinguished "running"
-from "started and died". A reboot is the most common failure moment on a phone, so the
-script has to be the most predictable part of the system.
+came back: the old script started processes without checking ports and printed nothing that
+distinguished "running" from "started and died". A reboot is the most common failure moment on
+a phone, so the script has to be the most predictable part of the system.
+
+The first version managed bare processes with pidfiles. Once the stack moved onto the phone
+(see [0007](0007-stack-on-the-phone.md)) the services are runit units, so the script became a
+thin, ordered front-end over `sv` — the supervisor, not the script, owns restart loops.
 
 ## How
 
-`scripts/termux-start.sh` with five subcommands (`start|stop|restart|status|logs`):
+`scripts/phone-start.sh`, deployed as `~/start.sh`, with
+`start | status | stop | restart | legacy`:
 
-- **Re-exec under bash** when invoked with `sh`, before any bash-only option is parsed.
-- **Idempotent:** checks the port/health first; a second run does nothing instead of starting
-  a twin process. Pidfiles live in `var/run`.
-- **Dependency order with waits:** GOWA → wait for the port → CRM → wait for `/health` →
-  PicoClaw (only if binary + config exist and no gateway is already running).
-- **Remote guard:** if `GOWA_BASE_URL` is not loopback it refuses to start a local GOWA and
-  says why — two sessions on one WhatsApp account is a support incident, not a start-up.
-- **Honest status:** one line per service plus a non-zero exit code when any is down, so it
-  can be used in `cron`, Termux:Boot, or a health check.
-- **Wake lock:** takes it when `termux-wake-lock` exists, releases it on `stop`.
-
-## The second variant: infrastructure-only phone
-
-On the owner's phone the CRM runs on the server, so `scripts/termux-infra-start.sh`
-(deployed as `~/start.sh`) starts only what the phone is for: `sshd`, the reverse tunnel
-the maintenance access uses (`127.0.0.1:2225`), its tailscale node and `crond`. It then
-prints one line per unit, and keeps `gowa / bridge / mariadb / php-fpm / nginx` **down** by
-default with a `--legacy` escape hatch.
-
-Two more pieces make that state survive a reboot:
-
-- `~/.termux/boot/00-server.sh` no longer names individual services — it calls
-  `~/start.sh`, so there is one list, not two that drift;
-- `sv-disable` leaves a `down` marker for each legacy unit, so `runsvdir` does not start
-  them on boot.
-
-Measured on the phone: the legacy stack held ~700 MB and one unpaired GOWA; after disabling
-it, `available` went from 618 MB to ~710 MB with ssh/tunnel/tailscale still up.
+- **Order is a dependency list, not a hope:** infrastructure (`sshd`, `rtunnel`,
+  `tailscaled`, `crond`) → `gowa` → wait for `:3000/health` → `crm` → wait for
+  `:8085/health` → `picoclaw`. The reverse tunnel is re-`up`ed after sshd is listening,
+  because it binds a port on the far side.
+- **Idempotent:** `sv up` on a running unit is a no-op; running the script twice is safe.
+- **Honest status:** one line per unit, `up`/`down`, plus free memory. `status` is the answer
+  to "is it actually running?" — not `ps`.
+- **Retired stack is visible but never started:** `mariadb`, `php-fpm`, `nginx`, `bridge`
+  are printed as down; `legacy` is the only way to start them.
+- **Wake lock** is taken on start, so Android is less likely to freeze the stack.
+- **One entry point:** `~/.termux/boot/00-server.sh` calls `~/start.sh`; there is no second
+  list of services to drift.
 
 ## Verify
 
 ```bash
-bash -n scripts/termux-start.sh
-CRM_HOME=/tmp/phonesim sh scripts/termux-start.sh status   # re-exec works under sh
-# gowa : down / crm : down / pico : down   → exit 1
+sh ~/start.sh status
+# sshd up · rtunnel up · tailscaled up · crond up
+# gowa up · crm up · picoclaw up
+# mariadb down · php-fpm down · nginx down · bridge down
 
-CRM_HOME=/tmp/nonexistent sh scripts/termux-start.sh start
-# [x] no /tmp/nonexistent/.env — run the installer first
-
-# remote guard
-GOWA_BASE_URL=https://crm.example.test … start
-# [!] the gateway runs elsewhere, not starting a local one.
+sh ~/start.sh restart      # down the three stack units, start them in order, re-print
+curl -s 127.0.0.1:8085/health   # {"ok": true, "crm": true}
+curl -s 127.0.0.1:18790/health  # {"status":"ok", ...}
 ```
+
+Run on the device after the migration: both health endpoints answered within the script's
+waits, and a second `start` changed nothing.
 
 ## Limits
 
-- Not executed on a real Termux device in this change; POSIX/bash behaviour was verified on
-  Linux. The Termux-specific parts (wake lock) degrade silently when the command is absent.
 - It does not pair WhatsApp: a missing session still needs a QR scan.
-- `status` reports PicoClaw by pidfile or path; a gateway started by another user/homedir is
-  reported as down by design.
+- If a unit crash-loops, `status` shows `down`; the reason is in
+  `$PREFIX/var/log/sv/<unit>/current`, not in the script's output.
+- The wake lock is best-effort; Android can still freeze a backgrounded Termux.
 
 ## Links
 
 - `docs/ANDROID-BACKGROUND.md`
 - `docs/DEPLOY.md`
-- CHANGELOG: "Phone start script…"
+- [0007 — the stack on the phone](0007-stack-on-the-phone.md)
