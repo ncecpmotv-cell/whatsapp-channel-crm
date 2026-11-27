@@ -35,6 +35,7 @@ CRM خفيف لقناة واتساب: مسودة → معتمد ومجدول →
 ~/start.sh             إقلاع مرتّب: infra → gowa → crm → picoclaw + الحالة
 ~/.termux/boot/00-server.sh   يستدعي ~/start.sh فقط
 ~/doctor.sh            نسخة من scripts/doctor.sh للفحص السريع
+edge/ (في الريبو)      Worker بلا حالة: edge_web_extract · edge_search · edge_status
 ```
 
 ## الحالة المُتحقَّق منها
@@ -77,6 +78,8 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 
 ## مفتوح الآن
 
+- **نشر `edge-mcp`**: الكود جاهز ومُختبر محليًا (13 اختبارًا + جلب حقيقي)، ويحتاج خطوة واحدة
+  بحسابك: `wrangler login` → `secret put EDGE_TOKEN` → `deploy`، ثم `picoclaw mcp add edge`.
 - **إشعارات تليجرام**: بانتظار `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (Termux:API يعمل).
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.
@@ -85,7 +88,7 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 
 | # | الخطوة | القبول |
 |---|---|---|
-| 1 | `edge-mcp` Worker: `edge_web_extract` + `edge_search` + `edge_status` | «لخّص هذه الصفحة» تعمل من تليجرام، والرام بلا تغيير |
+| 1 | ~~`edge-mcp` Worker~~ ✅ الكود جاهز (`edge/`) | يتبقى `wrangler deploy` بحسابك ثم `picoclaw mcp add edge` |
 | 2 | Google: `gsheet_append` + `gcal_event` (التوكن في أسرار الـWorker) | خطة أسبوع في شيت + أحداث تقويم |
 | 3 | SubTurn: محلّل → استراتيجي → محرّر + `/plan` | خطة + مسودات، والسياق < 8k توكن |
 

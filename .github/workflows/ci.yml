@@ -30,6 +30,20 @@ jobs:
       - name: Documentation contract
         run: python scripts/check_docs.py
 
+  edge:
+    name: edge worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: edge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Unit tests (node:test, no deps)
+        run: npm test
+
   shell:
     name: shell syntax
     runs-on: ubuntu-latest

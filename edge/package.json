@@ -1,0 +1,12 @@
+{
+  "name": "edge-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Stateless MCP tools for the phone CRM: page extraction, web search, status.",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "test": "node --test test/*.test.js",
+    "deploy": "wrangler deploy"
+  }
+}

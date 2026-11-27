@@ -1,0 +1,16 @@
+# Stateless edge tools for the phone CRM.
+# The phone keeps the data; this Worker only borrows CPU and secrets.
+name = "edge-mcp"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+# Secrets (never in this file):
+#   npx wrangler secret put EDGE_TOKEN        # bearer token the phone sends
+#   npx wrangler secret put BRAVE_API_KEY     # optional search key
+#   npx wrangler secret put TAVILY_API_KEY    # optional alternative (1k free credits/month)
+# Variables (public, safe to commit):
+[vars]
+MAX_CHARS = "6000"
+
+[observability]
+enabled = true

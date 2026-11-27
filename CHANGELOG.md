@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] — 2026-11-27
+
+### Added
+
+- `edge/`: a stateless Cloudflare Worker exposing MCP tools — `edge_web_extract`
+  (8 s timeout, 1.5 MB cap, script/style stripping), `edge_search` (Tavily → Brave →
+  DuckDuckGo fallback) and `edge_status`. One bearer token, constant-time compare, no
+  storage; the phone stays the only source of truth.
+- `edge/dev-server.mjs`: runs the same handler on node:http, so the MCP endpoint is
+  testable without an account. 13 `node:test` tests, zero dependencies, added to CI.
+- Measured: real extraction of example.com (title + 172 chars), 401 on a bad token,
+  -32601 on unknown methods; DuckDuckGo returns zero results from a datacenter IP, so a
+  search key is the reliable path and the tool says so.
+
+### Notes
+
+- Deployment is the one step that needs the owner: `wrangler login`, `secret put EDGE_TOKEN`,
+  `deploy` — then `picoclaw mcp add edge …` (see `docs/EDGE-MCP.md`).
+
 ## [3.4.0] — 2026-11-27
 
 ### Added
