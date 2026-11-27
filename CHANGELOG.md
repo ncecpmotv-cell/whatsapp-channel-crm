@@ -21,6 +21,9 @@ All notable changes to this project are documented here. The format follows
 
 - PicoClaw on Termux: config paths pointed at `/data/workspace`; rewritten to the Termux home.
 - PicoClaw's MCP entry pointed at the container port 8086; now 8085.
+- Access: the device is a HUAWEI POT-LX1AF, so the Termux tailscale node is named `smartp`
+  (the tailnet already had `pot-lx1af`). `tailscaled` now runs with `--statedir`; without it
+  `tailscale serve` failed with `no TailscaleVarRoot`. UI: https://smartp.tail16a0c8.ts.net
 
 ## [2.1.2] — 2026-11-27
 

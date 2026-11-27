@@ -48,6 +48,23 @@ Cutover, in order:
 infrastructure → gowa → crm → picoclaw, `restart` and `stop` subcommands, and the retired
 EspoCRM units listed but never started.
 
+### Access
+
+The device is a HUAWEI **POT-LX1AF** (P Smart 2019), not the Poco that was tried first: the
+tailnet already had a `pot-lx1af` node (the Android Tailscale app), so the Termux daemon is
+named **`smartp`** and publishes the UI itself:
+
+```bash
+TS="$HOME/gowa-espo/bin/tailscale --socket=$HOME/gowa-espo/var/tailscaled.sock"
+$TS up --hostname smartp --accept-dns=false --accept-routes=false
+$TS serve --bg --https=443 http://127.0.0.1:8085
+# https://smartp.tail16a0c8.ts.net (tailnet only)
+```
+
+`tailscaled` must run with `--statedir` as well as `--state`: without it, `tailscale serve`
+logs `cert refresh: … no TailscaleVarRoot` and HTTPS silently fails. The certificate is issued
+by ACME on first request; `tailscale cert` is a useful probe.
+
 ## Verify
 
 ```bash
@@ -60,6 +77,8 @@ curl -s 127.0.0.1:8085/health      # {"ok": true, "crm": true}
 curl -s 127.0.0.1:18790/health     # {"status":"ok",...}
 curl -su "$GOWA_USER:$GOWA_PASSWORD" -H 'X-Device-Id: primary' \
      127.0.0.1:3000/app/status     # is_logged_in: true, jid 966502369637
+# from any device in the tailnet:
+# https://smartp.tail16a0c8.ts.net  (Basic auth: crm / <BRIDGE_TOKEN>)
 ```
 
 MCP on the phone returns the same 16 tools, and `content_insights` answers with real data
