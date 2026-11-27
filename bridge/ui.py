@@ -219,6 +219,11 @@ button.subtle,a.subtle{background:transparent;border:1px solid var(--line);color
 button.subtle:hover{color:var(--ink);border-color:var(--ink-2)}
 button.subtle.danger{color:#c98b8b;border-color:#4a2f2f}
 button.subtle.danger:hover{color:#e8a0a0;border-color:#7a4444}
+/* ---- media preview ---------------------------------------------------- */
+.media{display:block;width:100%;max-height:360px;height:auto;object-fit:contain;
+  border-radius:var(--r-2);border:1px solid var(--line);background:#0b110e;margin:0 0 12px}
+.media:not([width]){aspect-ratio:4 / 3}
+.media-audio{width:100%;margin:0 0 12px}
 /* ---- editor (post detail) -------------------------------------------- */
 .notice{border-color:var(--accent);background:rgba(197,160,89,.08);margin-bottom:10px}
 .notice b{color:var(--accent);font-size:var(--fs-2)}
@@ -766,6 +771,28 @@ def post_page(post: dict, history: list[dict], channel: dict | None, notice: str
     elif post.get("published_at"):
         when_line = f'<p class="muted meta">✅ نُشر {fmt_ts(post["published_at"])}</p>'
 
+    media_block = ""
+    media_path = post.get("media_path") or ""
+    try:
+        meta_obj = json.loads(post.get("meta") or "{}")
+    except (json.JSONDecodeError, TypeError):
+        meta_obj = {}
+    if media_path:
+        media_url = f"/ui/media/{os.path.basename(media_path)}"
+        if kind == "image":
+            mw, mh = meta_obj.get("width"), meta_obj.get("height")
+            dims = (f' width="{int(mw)}" height="{int(mh)}"'
+                    if isinstance(mw, int) and isinstance(mh, int) and mw and mh else "")
+            media_block = (f'<img class="media" src="{media_url}" alt="مرفق المنشور"{dims} '
+                           f'loading="lazy" decoding="async">')
+        elif kind == "video":
+            media_block = (f'<video class="media" src="{media_url}" controls preload="metadata"></video>')
+        elif kind == "audio":
+            media_block = f'<audio class="media-audio" src="{media_url}" controls preload="metadata"></audio>'
+        else:
+            media_block = (f'<p><a role="button" class="ghost" href="{media_url}" target="_blank" '
+                           f'rel="noopener">فتح الملف المرفق</a></p>')
+
     editor = ""
     if editable:
         schedule_label = "إعادة الجدولة إلى" if post["status"] == "scheduled" else "جدولة إلى (اختياري)"
@@ -821,6 +848,7 @@ def post_page(post: dict, history: list[dict], channel: dict | None, notice: str
 <p class="muted meta">{meta_line}</p>
 {when_line}
 {"" if not notice else f'<div class="card notice"><b>{esc(notice)}</b></div>'}
+{media_block}
 {editor}
 {"" if editable else f'<h2>النص</h2><div class="card"><pre>{esc(post.get("body") or "")}</pre></div>'}
 {error}

@@ -15,6 +15,10 @@ import hashlib
 from email.parser import BytesParser
 from email.policy import default as email_policy
 import hmac
+import mimetypes
+import struct
+import threading
+import time as _time
 import json
 import logging
 import os
@@ -37,6 +41,41 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # Writable cache for generated assets (the code dir is mounted read-only).
 CACHE_DIR = os.environ.get("STATIC_CACHE", "/var/crm/static")
 MEDIA_DIR = os.environ.get("MEDIA_DIR", "/var/crm/media")
+def image_dimensions(data: bytes) -> tuple[int, int] | None:
+    """Read width/height from PNG/GIF/JPEG headers so the page reserves space (CLS)."""
+    if len(data) < 24:
+        return None
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return struct.unpack(">II", data[16:24])
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return struct.unpack("<HH", data[6:10])
+    if data[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            if marker in (0xD8, 0xD9) or 0xD0 <= marker <= 0xD7:
+                i += 2
+                continue
+            seg_len = struct.unpack(">H", data[i + 2:i + 4])[0]
+            if marker in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7,
+                          0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                height, width = struct.unpack(">HH", data[i + 5:i + 9])
+                return width, height
+            i += 2 + seg_len
+    return None
+
+
+MEDIA_NAME_RE = re.compile(
+    r"[a-f0-9]{8,32}\.(jpg|jpeg|png|webp|gif|mp4|mov|webm|mp3|ogg|m4a|opus|wav|pdf|doc|docx|xls|xlsx|ppt|pptx|txt|csv|zip)",
+    re.IGNORECASE)
+_AUTH_FAILS: dict[str, list[float]] = {}
+_AUTH_LOCK = threading.Lock()
+AUTH_MAX_FAILS = 10
+AUTH_WINDOW = 300.0
+
 ALLOWED_EXT = {
     "image": {".jpg", ".jpeg", ".png", ".webp", ".gif"},
     "video": {".mp4", ".mov", ".webm"},
@@ -178,14 +217,49 @@ class Handler(BaseHTTPRequestHandler):
                 return False
         return False
 
+    def _auth_throttled(self) -> bool:
+        ip = self.client_address[0]
+        now = _time.time()
+        with _AUTH_LOCK:
+            hits = [t for t in _AUTH_FAILS.get(ip, []) if now - t < AUTH_WINDOW]
+            _AUTH_FAILS[ip] = hits
+            return len(hits) >= AUTH_MAX_FAILS
+
+    def _note_auth_failure(self) -> None:
+        ip = self.client_address[0]
+        with _AUTH_LOCK:
+            _AUTH_FAILS.setdefault(ip, []).append(_time.time())
+
     def _require_basic(self) -> bool:
+        if self._auth_throttled():
+            self.send_response(429)
+            self.send_header("Retry-After", "300")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return False
         if self._basic_ok():
+            with _AUTH_LOCK:
+                _AUTH_FAILS.pop(self.client_address[0], None)
             return True
+        self._note_auth_failure()
         self.send_response(401)
         self.send_header("WWW-Authenticate", 'Basic realm="CRM"')
         self.send_header("Content-Length", "0")
         self.end_headers()
         return False
+
+    def _media(self, name: str):
+        if not MEDIA_NAME_RE.fullmatch(name or ""):
+            return self._send(404, {"error": "not found"})
+        path = os.path.join(MEDIA_DIR, name)
+        if not os.path.isfile(path):
+            return self._send(404, {"error": "not found"})
+        ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        with open(path, "rb") as fh:
+            data = fh.read()
+        return self._send_bytes(200, data, ctype,
+                                {"Cache-Control": "private, max-age=86400"},
+                                compress=False, validators=False)
 
     def _static(self, name: str):
         if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", name or ""):
@@ -245,6 +319,8 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/ui"):
             if not self._require_basic():
                 return None
+            if path.startswith("/ui/media/"):
+                return self._media(path[len("/ui/media/"):])
             return self._ui_get(path, query)
 
         return self._send(404, {"error": "not found"})
@@ -441,6 +517,15 @@ class Handler(BaseHTTPRequestHandler):
             media_path = os.path.join(MEDIA_DIR, uuid.uuid4().hex[:12] + ext)
             with open(media_path, "wb") as fh:
                 fh.write(payload)
+            if kind == "image":
+                dims = image_dimensions(payload)
+                if dims:
+                    try:
+                        payload_meta = json.loads(meta or "{}")
+                    except json.JSONDecodeError:
+                        payload_meta = {}
+                    payload_meta.update(width=dims[0], height=dims[1])
+                    meta = json.dumps(payload_meta, ensure_ascii=False)
         elif kind not in ("text",):
             kind = "text"
 

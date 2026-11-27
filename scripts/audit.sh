@@ -63,6 +63,10 @@ else
     ac=$(curl -s -o /dev/null -w '%{http_code}' -m 5 -u "crm:$TOKEN" "$BASE/static/$asset")
     check "static $asset ($ac)" "$([ "$ac" = "200" ] && echo 1 || echo 0)"
   done
+  mn=$(curl -s -o /dev/null -w '%{http_code}' -m 5 "$BASE/ui/media/aaaaaaaaaaaa.png")
+  check "media requires auth ($mn)" "$([ "$mn" = "401" ] && echo 1 || echo 0)"
+  mt=$(curl -s -o /dev/null -w '%{http_code}' -m 5 -u "crm:$TOKEN" "$BASE/ui/media/../../etc/passwd")
+  check "media traversal blocked ($mt)" "$([ "$mt" = "404" ] && echo 1 || echo 0)"
   check "cross-site POST rejected" "$([ "$(curl -s -o /dev/null -w '%{http_code}' -m 5 -u "crm:$TOKEN" -H 'Sec-Fetch-Site: cross-site' -d 'id=x' "$BASE/ui/content/cancel")" = "403" ] && echo 1 || echo 0)"
 fi
 

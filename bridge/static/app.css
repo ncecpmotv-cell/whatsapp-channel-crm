@@ -184,6 +184,11 @@ button.subtle,a.subtle{background:transparent;border:1px solid var(--line);color
 button.subtle:hover{color:var(--ink);border-color:var(--ink-2)}
 button.subtle.danger{color:#c98b8b;border-color:#4a2f2f}
 button.subtle.danger:hover{color:#e8a0a0;border-color:#7a4444}
+/* ---- media preview ---------------------------------------------------- */
+.media{display:block;width:100%;max-height:360px;height:auto;object-fit:contain;
+  border-radius:var(--r-2);border:1px solid var(--line);background:#0b110e;margin:0 0 12px}
+.media:not([width]){aspect-ratio:4 / 3}
+.media-audio{width:100%;margin:0 0 12px}
 /* ---- editor (post detail) -------------------------------------------- */
 .notice{border-color:var(--accent);background:rgba(197,160,89,.08);margin-bottom:10px}
 .notice b{color:var(--accent);font-size:var(--fs-2)}
