@@ -4,7 +4,7 @@
 - **Owner:** @ncecpmotv-cell
 - **Shipped in:** v2.1.1
 - **Roadmap:** R-15
-- **Files:** `scripts/termux-start.sh`, `docs/ANDROID-BACKGROUND.md`
+- **Files:** `scripts/termux-start.sh`, `scripts/termux-infra-start.sh`, `docs/ANDROID-BACKGROUND.md`
 
 ## Why
 
@@ -28,6 +28,24 @@ script has to be the most predictable part of the system.
 - **Honest status:** one line per service plus a non-zero exit code when any is down, so it
   can be used in `cron`, Termux:Boot, or a health check.
 - **Wake lock:** takes it when `termux-wake-lock` exists, releases it on `stop`.
+
+## The second variant: infrastructure-only phone
+
+On the owner's phone the CRM runs on the server, so `scripts/termux-infra-start.sh`
+(deployed as `~/start.sh`) starts only what the phone is for: `sshd`, the reverse tunnel
+the maintenance access uses (`127.0.0.1:2225`), its tailscale node and `crond`. It then
+prints one line per unit, and keeps `gowa / bridge / mariadb / php-fpm / nginx` **down** by
+default with a `--legacy` escape hatch.
+
+Two more pieces make that state survive a reboot:
+
+- `~/.termux/boot/00-server.sh` no longer names individual services — it calls
+  `~/start.sh`, so there is one list, not two that drift;
+- `sv-disable` leaves a `down` marker for each legacy unit, so `runsvdir` does not start
+  them on boot.
+
+Measured on the phone: the legacy stack held ~700 MB and one unpaired GOWA; after disabling
+it, `available` went from 618 MB to ~710 MB with ssh/tunnel/tailscale still up.
 
 ## Verify
 

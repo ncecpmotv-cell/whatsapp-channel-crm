@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.2] — 2026-11-27
+
+### Changed
+
+- The phone is infrastructure-only by default: `scripts/termux-infra-start.sh` starts
+  sshd, the reverse tunnel, tailscale and cron, and keeps the legacy EspoCRM/GOWA stack
+  down (`--legacy` opts in). Boot script delegates to it, so there is one list of services.
+- Disabled on the device: `gowa`, `bridge`, `mariadb`, `php-fpm`, `nginx` (down markers),
+  freeing ~90 MB of RAM and removing an unpaired second WhatsApp session.
+
 ## [2.1.1] — 2026-11-27
 
 ### Fixed
