@@ -49,6 +49,18 @@ curl -s -X POST localhost:8787/mcp -H 'Authorization: Bearer dev' \
 
 Bad token → 401; unknown method → JSON-RPC `-32601`; `file://` → error, not a fetch.
 
+## Deployed once, and what it proved
+
+A temporary deployment (`wrangler deploy --temporary`) answered correctly from the server:
+health, initialize, `tools/list`, and a real `edge_web_extract` of example.com (0.32 s).
+
+**The phone got 403 `cf-mitigated: challenge` from the same URL.** Cloudflare serves a
+managed challenge on `*.workers.dev` for the preview account from mobile-carrier IPs. So the
+Worker was never the problem; the ingress was. Fix options, in order: claim the preview
+account (60-minute link), use a custom domain route, or disable Bot Fight Mode on the zone.
+Until then the `edge` MCP server stays registered but unreachable from the phone — and
+`edge_status` cannot tell you that, which is why the symptom is documented here.
+
 ## Limits
 
 - Not deployed: needs `wrangler login` + `secret put EDGE_TOKEN` (one browser step). Until
