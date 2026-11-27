@@ -116,8 +116,12 @@ fi
 # ---- agent ---------------------------------------------------------------
 head_ "Agent"
 if [ -n "$PICO_BIN" ]; then
-  pico_home="$ROOT/picoclaw"
-  [ -d "$pico_home" ] || pico_home="$HOME/pico"
+  # a directory only counts as the PicoClaw home when it actually holds the config
+  pico_home=""
+  for candidate in "$ROOT/picoclaw" "$HOME/pico" "${PICO_HOME:-}"; do
+    [ -n "$candidate" ] && [ -f "$candidate/config.json" ] && { pico_home="$candidate"; break; }
+  done
+  [ -n "$pico_home" ] || pico_home="$HOME/pico"
   skills="$(PICOCLAW_HOME="$pico_home" "$PICO_BIN" skills list 2>/dev/null | grep -c '✓')"
   [ "${skills:-0}" -ge 1 ] && ok "skills installed: $skills" || meh "no skills found in $pico_home"
   grep -q '"crm"' "$pico_home/config.json" 2>/dev/null \
