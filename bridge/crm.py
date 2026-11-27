@@ -159,8 +159,9 @@ def _row(row) -> dict | None:
 class CrmClient:
     """SQLite-backed CRM. Shares the bridge Store's connection and lock."""
 
-    def __init__(self, store):
+    def __init__(self, store, tz_offset: int = 3):
         self.store = store
+        self.tz_offset = int(tz_offset)
         self._conn = store.conn
         self._lock = store.lock
         with self._lock:
@@ -433,6 +434,14 @@ class CrmClient:
     # in flight — cancel first, then delete.
     DELETABLE = ("draft", "failed")
 
+    def _label(self, post: dict) -> str:
+        """A short human name for a post, used in notifications."""
+        title = (post.get("title") or "").strip()
+        if title:
+            return title[:60]
+        body = " ".join((post.get("body") or "").split())
+        return (body[:60] or post.get("id", ""))
+
     def cancel_post(self, post_id: str) -> dict:
         """Mark as cancelled (ملغى): keeps the record, stops any queued send."""
         post = self.get_channel_post(post_id)
@@ -441,17 +450,24 @@ class CrmClient:
         if post["status"] == "published":
             raise PermissionError("لا يمكن إلغاء منشور منشور على القناة")
         self._exec("DELETE FROM outbox WHERE ref = ? AND status = 'pending'", (post_id,))
-        return self.update_channel_post(
+        result = self.update_channel_post(
             post_id, {"status": "failed", "last_error": "أُلغي يدويًا"},
             allowed_statuses=("draft", "scheduled", "publishing", "failed"),
         )
+        self.notify("content", "أُلغي عنصر", f"«{self._label(post)}» لن يُنشر.",
+                    f"/ui/post/{post_id}")
+        return result
 
     def restore_post(self, post_id: str) -> dict:
         """Bring a cancelled post back to draft."""
-        return self.update_channel_post(
+        result = self.update_channel_post(
             post_id, {"status": "draft", "last_error": "", "scheduled_at": None},
             allowed_statuses=("draft",),
         )
+        post = self.get_channel_post(post_id) or {}
+        self.notify("content", "أُعيد كمسودة", f"«{self._label(post)}» عاد إلى المسودات.",
+                    f"/ui/post/{post_id}")
+        return result
 
     def delete_post(self, post_id: str) -> dict:
         """Permanently remove a cancelled post."""
@@ -465,6 +481,8 @@ class CrmClient:
         self._exec("DELETE FROM outbox WHERE ref = ? AND status IN ('pending','failed')", (post_id,))
         self._exec("DELETE FROM crm_stats WHERE post_id = ?", (post_id,))
         self._exec("DELETE FROM crm_posts WHERE id = ?", (post_id,))
+        self.notify("content", "حُذف عنصر",
+                    f"«{self._label(post)}» حُذف نهائيًا.", "/ui/content")
         return {"id": post_id, "deleted": True}
 
     def get_channel_post(self, post_id: str) -> dict | None:
@@ -514,16 +532,31 @@ class CrmClient:
         if message_id:
             fields["message_id"] = message_id
         self.update_channel_post(post_id, fields)
+        post = self.get_channel_post(post_id) or {}
+        self.notify("publish", "تم النشر",
+                    f"«{self._label(post)}» نُشر على القناة.",
+                    f"/ui/post/{post_id}", dedupe_key=f"published:{post_id}")
 
     def mark_failed(self, post_id: str, error: str) -> None:
         self.update_channel_post(post_id, {"status": "failed", "last_error": error[:1000]})
+        post = self.get_channel_post(post_id) or {}
+        self.notify("publish", "فشل النشر",
+                    f"«{self._label(post)}»: {error.strip()[:140]}",
+                    f"/ui/post/{post_id}", dedupe_key=f"failed:{post_id}:{error[:40]}")
 
     def schedule_post(self, post_id: str, at: int, approved: bool) -> dict:
         status = "scheduled" if approved else "draft"
-        return self.update_channel_post(
+        result = self.update_channel_post(
             post_id, {"status": status, "scheduled_at": at},
             allowed_statuses=("draft", "scheduled", "failed"),
         )
+        if approved:
+            post = self.get_channel_post(post_id) or {}
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(at + self.tz_offset * 3600))
+            self.notify("content", "تمت الجدولة",
+                        f"«{self._label(post)}» سيُنشر في {when}.",
+                        f"/ui/post/{post_id}", dedupe_key=f"scheduled:{post_id}:{at}")
+        return result
 
     def count_posts(self, status: str | None = None) -> int:
         if status:

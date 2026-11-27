@@ -77,6 +77,7 @@ types and proposed times, all in `draft`.
 | R-05 | Content Strategist skill pack | v2.1.0 | [0005](docs/features/0005-content-strategist-skill.md) |
 | R-15 | Phone start script: idempotent, ordered, honest | v2.1.1 | [0006](docs/features/0006-phone-start-script.md) |
 | R-16 | Run the whole stack on the phone (no server containers) | v3.0.0 | [0007](docs/features/0007-stack-on-the-phone.md) |
+| R-17 | Notifications for every content event | v3.1.0 | [0008](docs/features/0008-notifications.md) |
 
 ---
 

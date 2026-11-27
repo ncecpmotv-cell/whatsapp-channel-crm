@@ -56,6 +56,40 @@ class CrmTest(unittest.TestCase):
         self.crm.delete_post(scheduled["id"])  # cancelled -> deletable
         self.assertIsNone(self.crm.get_channel_post(scheduled["id"]))
 
+    def test_lifecycle_notifications(self):
+        """Every lifecycle step lands in the bell; reading clears the badge."""
+        post = self.crm.create_channel_post({
+            "channel_jid": "1203630@newsletter", "title": "منشور اختبار", "body": "x"})
+        self.assertEqual(self.crm.unread_notifications(), 0)
+
+        self.crm.schedule_post(post["id"], 9999999999, approved=True)
+        self.crm.cancel_post(post["id"])
+        self.assertEqual(self.crm.unread_notifications(), 2)
+        kinds = [n["kind"] for n in self.crm.notifications()]
+        self.assertTrue(all(k == "content" for k in kinds))
+        self.assertTrue(any("أُلغي" in n["title"] for n in self.crm.notifications()))
+
+        self.crm.delete_post(post["id"])
+        titles = [n["title"] for n in self.crm.notifications()]
+        self.assertIn("حُذف عنصر", titles)
+        self.assertEqual(self.crm.unread_notifications(), 3)
+
+        self.crm.mark_notifications_read()
+        self.assertEqual(self.crm.unread_notifications(), 0)
+
+    def test_publish_notifications_dedupe(self):
+        post = self.crm.create_channel_post({
+            "channel_jid": "1203630@newsletter", "title": "نشر", "body": "x"})
+        self.crm.mark_published(post["id"], "MID")
+        self.crm.mark_published(post["id"], "MID")
+        publish = [n for n in self.crm.notifications() if n["kind"] == "publish"]
+        self.assertEqual(len(publish), 1)  # dedupe_key keeps one row per post
+
+        other = self.crm.create_channel_post({
+            "channel_jid": "1203630@newsletter", "title": "فشل", "body": "x"})
+        self.crm.mark_failed(other["id"], "GOWA 500")
+        self.assertTrue(any("فشل النشر" in n["title"] for n in self.crm.notifications()))
+
     def test_content_insights(self):
         now = int(__import__("time").time())
         for kind, views, forwards, reactions, hour in (

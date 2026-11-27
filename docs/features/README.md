@@ -13,6 +13,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0005](0005-content-strategist-skill.md) | Content Strategist skill for PicoClaw | shipped | R-05 |
 | [0006](0006-phone-start-script.md) | Phone start script (idempotent, ordered) | shipped | R-15 |
 | [0007](0007-stack-on-the-phone.md) | The stack moved to the phone | shipped | R-16 |
+| [0008](0008-notifications.md) | Notifications that actually ring | shipped | R-17 |
 
 ## Adding one
 

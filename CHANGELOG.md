@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] — 2026-11-27
+
+### Added
+
+- Content events now write to the bell: scheduled, published, publish failed, cancelled,
+  restored and deleted — emitted by `CrmClient`, so UI, MCP and the scheduler all produce
+  them. Publish/fail notifications carry dedupe keys so retries do not duplicate rows.
+- Unread badge and notifications page verified end-to-end (0 → 1 after a delete).
+
 ## [3.0.3] — 2026-11-27
 
 ### Fixed
