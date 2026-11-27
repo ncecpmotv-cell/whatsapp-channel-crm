@@ -93,6 +93,11 @@ class Bridge:
         self.cfg = cfg
         self.store = store or Store(cfg.db_path)
         self.crm = crm or CrmClient(self.store, getattr(self.cfg, "tz_offset", 3))
+        try:
+            from notify import PushNotifier
+            self.crm.pusher = PushNotifier(self.cfg)
+        except Exception:  # push is optional; never block startup
+            self.crm.pusher = None
         self.gowa = gowa or GowaClient(cfg.gowa_base_url, device_id=cfg.gowa_device_id,
                                        user=cfg.gowa_user, password=cfg.gowa_password)
         self._stop = threading.Event()

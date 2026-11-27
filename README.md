@@ -44,17 +44,25 @@ cd whatsapp-channel-crm
 bash scripts/install.sh
 ```
 
-The installer detects Termux or Linux, downloads the **latest** GOWA and PicoClaw releases for your architecture, generates secrets, registers the CRM as an MCP server inside PicoClaw, writes a launcher, and starts everything.
+The installer detects Termux or Linux, downloads the **latest** GOWA, PicoClaw **and Tailscale**
+builds for your architecture, generates secrets, registers the CRM as an MCP server inside
+PicoClaw, writes a launcher, starts everything and prints a Tailscale login link. After you
+approve the link, `bash scripts/install.sh --finish` publishes the UI at
+`https://<host>.<tailnet>.ts.net` — no open ports.
+
+The full path, including WhatsApp pairing and the agent key, is in
+**[`docs/SETUP-FROM-ZERO.md`](docs/SETUP-FROM-ZERO.md)**.
 
 ```bash
 ~/.whatsapp-crm/bin/crmctl status     # crm / gowa / pico
 bash scripts/install.sh --qr          # print the WhatsApp pairing QR
 bash scripts/install.sh --upgrade     # pull the latest GOWA, PicoClaw and CRM
+bash scripts/doctor.sh                # one sweep: services, pairing, MCP, tailnet, push
 ```
 
 Open `http://127.0.0.1:8085/ui` — any username, password = `BRIDGE_TOKEN` from `~/.whatsapp-crm/etc/crm.env`.
 
-Options, Tailscale, systemd/runit and uninstall: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Options, systemd/runit and uninstall: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## The content workflow
 

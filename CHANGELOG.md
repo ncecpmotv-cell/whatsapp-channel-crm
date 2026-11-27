@@ -4,6 +4,34 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] — 2026-11-27
+
+### Added
+
+- `scripts/doctor.sh`: a read-only sweep of toolchain, runit units, the three health
+  endpoints, WhatsApp pairing, MCP tool count, agent skills, the Tailscale node and serve
+  entry, and push state. Detects the runit and `~/.whatsapp-crm` layouts; exits non-zero on
+  a failure. Verified on the phone: 22 passed, 0 failed, 0 warnings.
+- `docs/SETUP-FROM-ZERO.md` links the doctor as the post-install check.
+
+## [3.2.0] — 2026-11-27
+
+### Added
+
+- Push notifications: `PushNotifier` delivers every bell event to Telegram (bot token +
+  chat id) and/or Termux:API (`termux-notification`), off the request path and never raising.
+  `/health` reports `push` state; `PUSH_EVENTS` chooses which events ring.
+- The installer installs and wires **Tailscale**: static binaries for the machine's arch, a
+  runit unit with `--state` and `--statedir`, a login link, and `--finish` to publish the UI
+  with `tailscale serve --https=443`. New flags `--tailscale`, `--skip-tailscale`, `--finish`.
+
+### Docs
+
+- `docs/SETUP-FROM-ZERO.md`: the ordered zero-to-running guide (F-Droid prerequisites,
+  installer steps, Tailscale loop and its failure modes, GOWA pairing, PicoClaw, push,
+  health sweep, manual residue).
+- Installer summary is now a checklist of what is done and the four human-only steps.
+
 ## [3.1.0] — 2026-11-27
 
 ### Added

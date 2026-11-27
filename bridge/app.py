@@ -387,9 +387,15 @@ class Handler(BaseHTTPRequestHandler):
             guard = {"public_url": bool(cfg.public_base_url),
                      "trusted": bool(cfg.trusted_origins),
                      "tailnet": bool(cfg.allow_tailnet_domain)}
+            try:
+                from notify import describe as push_state
+                push = push_state(cfg)
+            except Exception:
+                push = {"enabled": False}
             return self._send(200, {"ok": self.bridge.crm.ping(),
                                     "crm": self.bridge.crm.ping(),
-                                    "origin_guard": guard})
+                                    "origin_guard": guard,
+                                    "push": push})
         if path == "/status":
             if not self._bearer_ok():
                 return self._send(401, {"error": "unauthorized"})

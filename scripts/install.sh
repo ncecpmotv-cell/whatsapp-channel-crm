@@ -20,6 +20,7 @@ MODE="install"
 DRY=0
 SKIP_GOWA=0
 SKIP_PICO=0
+SKIP_TAILSCALE=0
 NO_SERVICE=0
 LOCAL_SRC=""
 
@@ -38,6 +39,9 @@ while [ $# -gt 0 ]; do
     --skip-picoclaw) SKIP_PICO=1; shift ;;
     --no-service) NO_SERVICE=1; shift ;;
     --from-local) LOCAL_SRC="$2"; shift 2 ;;
+    --skip-tailscale) SKIP_TAILSCALE=1; shift ;;
+    --tailscale) MODE="tailscale"; shift ;;
+    --finish) MODE="finish"; shift ;;
     --dry-run) DRY=1; shift ;;
     -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
     *) die "unknown option: $1" ;;
@@ -65,10 +69,107 @@ need() { command -v "$1" >/dev/null 2>&1 || die "missing '$1' — install it fir
 install_deps() {
   if is_termux; then
     say "Installing Termux packages"
-    run pkg install -y python curl unzip tar openssl-tool
+    run pkg install -y python curl unzip tar openssl-tool proot
+    # Optional but recommended: on-screen notifications (needs the Termux:API app)
+    command -v termux-notification >/dev/null 2>&1 || \
+      warn "termux-api not installed: pkg install termux-api + the Termux:API app (push notifications)"
   else
     need python3; need curl; need unzip; need tar
   fi
+}
+
+ts_arch() {
+  case "$(uname -m)" in
+    aarch64|arm64) echo arm64 ;;
+    x86_64|amd64)  echo amd64 ;;
+    armv7l|armv7)  echo arm ;;
+    armv6l|armv6)  echo arm ;;
+    *) die "tailscale: unsupported architecture $(uname -m)" ;;
+  esac
+}
+
+install_tailscale() {
+  [ -x "$BIN/tailscale" ] && { say "tailscale already in $BIN"; return 0; }
+  if command -v tailscale >/dev/null 2>&1; then
+    say "using the system tailscale"
+    return 0
+  fi
+  local tarball tmp
+  tarball="$(curl -fsSL 'https://pkgs.tailscale.com/stable/?mode=json' \
+    | python3 -c "import json,sys;print(json.load(sys.stdin)['Tarballs']['$(ts_arch)'])")" || return 1
+  say "tailscale $tarball"
+  tmp="$(mktemp -d)"
+  run curl -fsSL "https://pkgs.tailscale.com/stable/$tarball" -o "$tmp/ts.tgz"
+  if [ "$DRY" = 0 ]; then
+    tar xzf "$tmp/ts.tgz" -C "$tmp"
+    install -m 0755 "$(find "$tmp" -type f -name tailscale  | head -1)" "$BIN/tailscale"
+    install -m 0755 "$(find "$tmp" -type f -name tailscaled | head -1)" "$BIN/tailscaled"
+  fi
+  rm -rf "$tmp"
+}
+
+tailscale_unit() {  # runit on Termux; instructions elsewhere
+  local sock="$VAR/tailscaled.sock" state="$VAR/tailscaled.state" dir="$VAR/tailscale-state"
+  mkdir -p "$VAR" "$dir" 2>/dev/null || true
+  if ! is_termux; then
+    warn "not Termux: run tailscaled yourself, e.g."
+    printf '    tailscaled --tun=userspace-networking --statedir=%s --state=%s --socket=%s\n' \
+      "$dir" "$state" "$sock"
+    return 0
+  fi
+  [ -f "$ROOT/etc/resolv.conf" ] || printf 'nameserver 1.1.1.1\n' > "$ROOT/etc/resolv.conf"
+  local svc="$PREFIX/var/service/tailscaled"
+  run mkdir -p "$svc" "$svc/log" "$PREFIX/var/log/sv/tailscaled"
+  if [ "$DRY" = 0 ]; then
+    cat > "$svc/run" <<EOF
+#!/data/data/com.termux/files/usr/bin/sh
+exec 2>&1
+HOME=\$HOME
+export SSL_CERT_FILE="\${SSL_CERT_FILE:-\$PREFIX/etc/tls/cert.pem}"
+export SSL_CERT_DIR="\${SSL_CERT_DIR:-\$PREFIX/etc/tls}"
+exec proot -b "$ROOT/etc/resolv.conf:/etc/resolv.conf" \\
+  -b "\$PREFIX/etc/tls/cert.pem:/etc/ssl/certs/ca-certificates.crt" \\
+  "$BIN/tailscaled" \\
+  --tun=userspace-networking \\
+  --state="$state" --statedir="$dir" --socket="$sock" --port=41641
+EOF
+    printf '#!/data/data/com.termux/files/usr/bin/sh\nexec svlogd -tt %s/var/log/sv/tailscaled\n' \
+      "$PREFIX" > "$svc/log/run"
+    chmod +x "$svc/run" "$svc/log/run"
+    ( command -v service-daemon >/dev/null 2>&1 && service-daemon start ) >/dev/null 2>&1 || true
+    sv up tailscaled 2>/dev/null || true
+  fi
+  say "tailscaled unit: $svc (userspace networking, state in $VAR)"
+}
+
+tailscale_login() {
+  local sock="$VAR/tailscaled.sock" name log="$LOG/tailscale-login.log"
+  name="${TAILSCALE_HOSTNAME:-$(hostname 2>/dev/null || echo crm-phone)}"
+  say "Tailscale login (hostname: $name)"
+  if [ "$DRY" = 1 ]; then
+    printf '   would run: tailscale up --hostname %s --accept-dns=false --accept-routes=false\n' "$name"
+    return 0
+  fi
+  "$BIN/tailscale" --socket="$sock" up --hostname "$name" \
+    --accept-dns=false --accept-routes=false >"$log" 2>&1 &
+  local url="" i=0
+  while [ "$i" -lt 12 ]; do
+    url="$(grep -o 'https://login.tailscale.com/a/[a-z0-9]*' "$log" 2>/dev/null | head -1)"
+    [ -n "$url" ] && break
+    sleep 1; i=$((i + 1))
+  done
+  if [ -n "$url" ]; then
+    printf '\n  Open this link once, then re-run: bash scripts/install.sh --finish\n  %s\n\n' "$url"
+  else
+    warn "could not read a login URL (see $log); run: $BIN/tailscale --socket=$sock up"
+  fi
+}
+
+tailscale_serve() {
+  local sock="$VAR/tailscaled.sock"
+  say "Publishing the UI on the tailnet"
+  run "$BIN/tailscale" --socket="$sock" serve --bg --https=443 "http://127.0.0.1:$BRIDGE_PORT"
+  [ "$DRY" = 1 ] || "$BIN/tailscale" --socket="$sock" serve status 2>/dev/null | head -4
 }
 
 latest_tag() {  # repo -> tag (vX.Y.Z)
@@ -318,12 +419,21 @@ $(printf '\033[1;32mDone.\033[0m')
   UI       : http://127.0.0.1:$BRIDGE_PORT/ui   (user: anything · password: BRIDGE_TOKEN)
   secrets  : $ETC/crm.env
   pairing  : bash scripts/install.sh --qr
-  PicoClaw : run PICOCLAW_HOME=$ROOT/picoclaw $BIN/picoclaw onboard
-             (model key + telegram bot token, then crmctl restart)
-  Guides   : docs/PAIRING-GOWA.md · docs/TELEGRAM-AGENT.md · docs/CONTENT-PLAYBOOK.md
 
-Private access over Tailscale:
-  tailscale serve --bg --https=443 http://127.0.0.1:$BRIDGE_PORT
+What is done / what is left:
+
+  [x] GOWA gateway        :3000   (binary in $BIN/gowa)
+  [x] CRM + MCP           :$BRIDGE_PORT  (UI + 16 tools)
+  [x] PicoClaw agent      :18790  (MCP server 'crm' registered)
+  [x] tailscaled unit     :$VAR/tailscaled.sock (userspace networking)
+
+  [ ] WhatsApp pairing    -> bash scripts/install.sh --qr   (scan once per device)
+  [ ] Tailscale login     -> open the link printed above, then: bash scripts/install.sh --finish
+  [ ] Agent model key     -> PICOCLAW_HOME=$ROOT/picoclaw $BIN/picoclaw onboard
+  [ ] Push notifications  -> Telegram bot token, or pkg install termux-api + Termux:API app
+
+Everything else (ports, tokens, MCP wiring, skills) is already configured.
+Guides: docs/SETUP-FROM-ZERO.md · docs/PAIRING-GOWA.md · docs/TELEGRAM-AGENT.md
 EOF
 }
 
@@ -341,6 +451,21 @@ banner() {
       write_crmctl
       write_service
       [ "$DRY" = 1 ] || "$BIN/crmctl" start || true
+      if [ "$SKIP_TAILSCALE" = 0 ]; then
+        install_tailscale || warn "tailscale download failed; install it manually (docs/SETUP-FROM-ZERO.md)"
+        tailscale_unit
+        tailscale_login
+      fi
+      summary
+      ;;
+    tailscale)
+      install_tailscale
+      tailscale_unit
+      tailscale_login
+      tailscale_serve || true
+      ;;
+    finish)
+      tailscale_serve || warn "tailscale is not logged in yet — open the login link first"
       summary
       ;;
     upgrade)

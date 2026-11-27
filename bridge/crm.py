@@ -19,6 +19,7 @@ import json
 import os
 import time
 import uuid
+from typing import Any
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS crm_contacts (
@@ -162,6 +163,7 @@ class CrmClient:
     def __init__(self, store, tz_offset: int = 3):
         self.store = store
         self.tz_offset = int(tz_offset)
+        self.pusher: Any = None  # set by Bridge; PushNotifier or None
         self._conn = store.conn
         self._lock = store.lock
         with self._lock:
@@ -746,6 +748,8 @@ class CrmClient:
                 "INSERT INTO crm_notifications (id, kind, title, body, link, at, dedupe_key) "
                 "VALUES (?,?,?,?,?,?,?)",
                 (uuid.uuid4().hex[:12], kind, title, body, link, _now(), dedupe_key))
+            if self.pusher is not None:
+                self.pusher.send(kind, title, body, link)
             return True
         except Exception:  # duplicate dedupe_key
             return False

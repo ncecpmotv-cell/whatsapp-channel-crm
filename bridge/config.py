@@ -50,6 +50,10 @@ class Config:
     public_base_url: str = ""
     trusted_origins: str = ""
     allow_tailnet_domain: str = ""
+    # push channels: Telegram bot and/or Termux:API (termux-notification)
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+    push_events: str = "publish,failed"
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -99,6 +103,9 @@ class Config:
             public_base_url=get("PUBLIC_BASE_URL"),
             trusted_origins=get("TRUSTED_ORIGINS"),
             allow_tailnet_domain=get("ALLOW_TAILNET_DOMAIN"),
+            telegram_bot_token=get("TELEGRAM_BOT_TOKEN"),
+            telegram_chat_id=get("TELEGRAM_CHAT_ID"),
+            push_events=get("PUSH_EVENTS", "publish,failed"),
         )
         cfg.validate()
         return cfg
@@ -121,4 +128,5 @@ _KNOWN_KEYS = {
     "BRIDGE_POLL_INTERVAL", "BRIDGE_CHANNEL_SYNC_INTERVAL", "BRIDGE_LOG_LEVEL",
     "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP", "GOWA_USER", "GOWA_PASSWORD",
     "APP_TZ_OFFSET", "PUBLIC_BASE_URL", "TRUSTED_ORIGINS", "ALLOW_TAILNET_DOMAIN",
+    "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PUSH_EVENTS",
 }

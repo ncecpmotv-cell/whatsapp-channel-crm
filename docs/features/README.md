@@ -14,6 +14,9 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0006](0006-phone-start-script.md) | Phone start script (idempotent, ordered) | shipped | R-15 |
 | [0007](0007-stack-on-the-phone.md) | The stack moved to the phone | shipped | R-16 |
 | [0008](0008-notifications.md) | Notifications that actually ring | shipped | R-17 |
+| [0009](0009-push-notifications.md) | Push notifications (Telegram + Termux:API) | shipped | R-18 |
+| [0010](0010-installer-tailscale.md) | The installer owns Tailscale | shipped | R-19 |
+| [0011](0011-doctor-script.md) | `doctor.sh`: one command that tells the truth | shipped | R-20 |
 
 ## Adding one
 
