@@ -1,19 +1,18 @@
 """Origin guard: same-origin posts must survive a reverse proxy (tailscale serve)."""
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import origin_allowed  # noqa: E402
+from config import Config  # noqa: E402
 
 
 class ConfigOriginTest(unittest.TestCase):
     def test_proxy_settings_are_read_from_the_env_file(self):
         """The UI settings live in the env file, not in os.environ."""
-        import tempfile
-        from config import Config
-
         path = tempfile.mktemp()
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("GOWA_WEBHOOK_SECRET=s\nBRIDGE_TOKEN=t\n"
