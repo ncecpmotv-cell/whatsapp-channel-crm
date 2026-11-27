@@ -54,6 +54,11 @@ class Config:
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
     push_events: str = "publish,failed"
+    # weekly digest: deterministic numbers, sent once a week
+    digest_enabled: bool = True
+    digest_weekday: int = 6   # Sunday (Monday = 0)
+    digest_hour: int = 20
+    picoclaw_home: str = "~/pico"
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -106,6 +111,10 @@ class Config:
             telegram_bot_token=get("TELEGRAM_BOT_TOKEN"),
             telegram_chat_id=get("TELEGRAM_CHAT_ID"),
             push_events=get("PUSH_EVENTS", "publish,failed"),
+            digest_enabled=get_bool("DIGEST_ENABLED", True),
+            digest_weekday=get_int("DIGEST_WEEKDAY", 6),
+            digest_hour=get_int("DIGEST_HOUR", 20),
+            picoclaw_home=os.path.expanduser(get("PICOCLAW_HOME") or "~/pico"),
         )
         cfg.validate()
         return cfg
@@ -129,4 +138,5 @@ _KNOWN_KEYS = {
     "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP", "GOWA_USER", "GOWA_PASSWORD",
     "APP_TZ_OFFSET", "PUBLIC_BASE_URL", "TRUSTED_ORIGINS", "ALLOW_TAILNET_DOMAIN",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PUSH_EVENTS",
+    "DIGEST_ENABLED", "DIGEST_WEEKDAY", "DIGEST_HOUR", "PICOCLAW_HOME",
 }

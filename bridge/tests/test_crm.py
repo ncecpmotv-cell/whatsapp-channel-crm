@@ -91,6 +91,42 @@ class CrmTest(unittest.TestCase):
         self.crm.mark_failed(other["id"], "GOWA 500")
         self.assertTrue(any("فشل النشر" in n["title"] for n in self.crm.notifications()))
 
+    def test_plan_save_replace_and_approve(self):
+        plan = self.crm.save_plan("2026-12-07", [
+            {"title": "منشور أول", "body": "نص", "kind": "text", "slot_at": "2026-12-07 19:00"},
+            {"title": "فيديو قصير", "kind": "video", "goal": "engagement"},
+        ], title="خطة الشتاء")
+        self.assertEqual(plan["status"], "proposed")
+        self.assertEqual(len(plan["items"]), 2)
+        self.assertEqual(plan["items"][0]["slot_at"] % 60, 0)
+
+        # same week replaces items, not a second plan
+        plan = self.crm.save_plan("2026-12-07", [{"title": "بديل", "kind": "text"}])
+        self.assertEqual(len(plan["items"]), 1)
+        self.assertEqual(len(self.crm.list_plans()), 1)
+
+        result = self.crm.approve_plan(plan["id"], "1203630@newsletter")
+        self.assertEqual(result["created"], 1)
+        post = self.crm.get_channel_post(result["posts"][0])
+        self.assertEqual(post["status"], "draft")           # no slot -> draft
+        self.assertEqual(self.crm.get_plan(plan_id=plan["id"])["status"], "approved")
+
+        # idempotent
+        again = self.crm.approve_plan(plan["id"], "1203630@newsletter")
+        self.assertTrue(again.get("already"))
+
+        # approved plans are immutable
+        with self.assertRaises(PermissionError):
+            self.crm.save_plan("2026-12-07", [{"title": "تعديل"}])
+
+    def test_plan_slot_schedules_and_publishes_later(self):
+        plan = self.crm.save_plan("2020-01-06", [
+            {"title": "مجدول", "slot_at": "2020-01-06 21:00"}])
+        result = self.crm.approve_plan(plan["id"], "1203630@newsletter")
+        post = self.crm.get_channel_post(result["posts"][0])
+        self.assertEqual(post["status"], "scheduled")
+        self.assertEqual(len(self.crm.due_posts()), 1)
+
     def test_content_gaps_finds_opportunities_and_saturation(self):
         """A term that appears once with high views is an opportunity, not a trend."""
         def add(title, body, kind, views, at):

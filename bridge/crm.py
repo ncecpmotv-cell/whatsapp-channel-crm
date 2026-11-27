@@ -128,6 +128,29 @@ CREATE TABLE IF NOT EXISTS crm_chat (
     content TEXT NOT NULL,
     at      INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS crm_plans (
+    id          TEXT PRIMARY KEY,
+    week_start  TEXT NOT NULL,
+    title       TEXT NOT NULL DEFAULT '',
+    notes       TEXT,
+    status      TEXT NOT NULL DEFAULT 'proposed',
+    created_at  INTEGER NOT NULL,
+    updated_at  INTEGER NOT NULL,
+    approved_at INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS crm_plans_week ON crm_plans(week_start);
+CREATE TABLE IF NOT EXISTS crm_plan_items (
+    id       TEXT PRIMARY KEY,
+    plan_id  TEXT NOT NULL,
+    position INTEGER NOT NULL,
+    title    TEXT NOT NULL,
+    body     TEXT NOT NULL DEFAULT '',
+    kind     TEXT NOT NULL DEFAULT 'text',
+    goal     TEXT,
+    slot_at  INTEGER,
+    post_id  TEXT
+);
+CREATE INDEX IF NOT EXISTS crm_plan_items_plan ON crm_plan_items(plan_id, position);
 CREATE TABLE IF NOT EXISTS crm_channel_info (
     jid         TEXT PRIMARY KEY,
     name        TEXT,
@@ -719,6 +742,123 @@ class CrmClient:
         ranked.sort(key=lambda x: (-x["avg_views"], -x["posts"]))
         return {"days": days, "tz_offset": offset, "buckets": len(ranked),
                 "best": ranked[:8], "worst": ranked[-3:] if len(ranked) > 3 else []}
+
+    # -- weekly plans -------------------------------------------------------
+    PLAN_KINDS = ("text", "image", "video", "audio", "file", "link")
+    PLAN_GOALS = ("awareness", "engagement", "conversion")
+
+    def _slot_epoch(self, value) -> int | None:
+        """Accept epoch seconds or a local 'YYYY-MM-DD HH:MM' string (owner's clock)."""
+        if value in (None, ""):
+            return None
+        if isinstance(value, (int, float)):
+            return int(value)
+        text = str(value).strip().replace("T", " ")
+        for fmt, size in (("%Y-%m-%d %H:%M:%S", 19), ("%Y-%m-%d %H:%M", 16), ("%Y-%m-%d", 10)):
+            try:
+                local = dt.datetime.strptime(text[:size], fmt)
+            except ValueError:
+                continue
+            # the owner types wall-clock time; convert it to UTC epoch
+            return int(local.replace(tzinfo=dt.UTC).timestamp()) - self.tz_offset * 3600
+        raise ValueError(f"unrecognised slot: {value!r} (use 'YYYY-MM-DD HH:MM')")
+
+    def save_plan(self, week_start: str, items: list[dict], title: str = "",
+                  notes: str = "") -> dict:
+        """Create or replace the proposed plan for a week. Approved plans are immutable."""
+        try:
+            week = dt.date.fromisoformat(str(week_start)[:10]).isoformat()
+        except ValueError as exc:
+            raise ValueError("week_start must be YYYY-MM-DD") from exc
+        if not items:
+            raise ValueError("الخطة تحتاج عنصرًا واحدًا على الأقل")
+        existing = self._one("SELECT * FROM crm_plans WHERE week_start = ?", (week,))
+        if existing and existing["status"] == "approved":
+            raise PermissionError("الخطة معتمدة — أنشئ خطة أسبوع آخر بدل تعديلها")
+        now = _now()
+        plan_id = existing["id"] if existing else uuid.uuid4().hex[:12]
+        with self._lock:
+            if existing:
+                self._conn.execute("DELETE FROM crm_plan_items WHERE plan_id = ?", (plan_id,))
+                self._conn.execute(
+                    "UPDATE crm_plans SET title=?, notes=?, status='proposed', updated_at=? WHERE id=?",
+                    (title, notes, now, plan_id))
+            else:
+                self._conn.execute(
+                    "INSERT INTO crm_plans (id, week_start, title, notes, status, created_at, updated_at) "
+                    "VALUES (?,?,?,?,'proposed',?,?)",
+                    (plan_id, week, title, notes, now, now))
+            for index, item in enumerate(items):
+                kind = (item.get("kind") or item.get("type") or "text").strip().lower()
+                if kind not in self.PLAN_KINDS:
+                    kind = "text"
+                if not (item.get("title") or item.get("body")):
+                    raise ValueError(f"العنصر {index + 1} بلا عنوان أو نص")
+                self._conn.execute(
+                    "INSERT INTO crm_plan_items (id, plan_id, position, title, body, kind, goal, slot_at) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (uuid.uuid4().hex[:12], plan_id, index, (item.get("title") or "").strip(),
+                     (item.get("body") or "").strip(), kind, item.get("goal"),
+                     self._slot_epoch(item.get("slot_at") or item.get("at"))))
+            self._conn.commit()
+        plan = self.get_plan(plan_id=plan_id) or {}
+        self.notify("content", "خطة جديدة", f"{len(items)} عناصر للأسبوع {week}", "/ui/plan")
+        return plan
+
+    def get_plan(self, plan_id: str | None = None, week_start: str | None = None) -> dict | None:
+        if plan_id:
+            plan = self._one("SELECT * FROM crm_plans WHERE id = ?", (plan_id,))
+        elif week_start:
+            plan = self._one("SELECT * FROM crm_plans WHERE week_start = ?", (str(week_start)[:10],))
+        else:
+            plan = self._one("SELECT * FROM crm_plans ORDER BY week_start DESC LIMIT 1")
+        if not plan:
+            return None
+        plan = dict(plan)
+        plan["items"] = self._all(
+            "SELECT * FROM crm_plan_items WHERE plan_id = ? ORDER BY position", (plan["id"],))
+        return plan
+
+    def default_channel(self) -> str:
+        """The channel a plan should target: the configured profile, else the last post's."""
+        row = self._one("SELECT jid FROM crm_channel_info WHERE jid LIKE '%@newsletter' LIMIT 1")
+        if row:
+            return row["jid"]
+        row = self._one("SELECT channel_jid FROM crm_posts ORDER BY created_at DESC LIMIT 1")
+        return str((row or {}).get("channel_jid") or "")
+
+    def list_plans(self, limit: int = 8) -> list[dict]:
+        return self._all("SELECT * FROM crm_plans ORDER BY week_start DESC LIMIT ?", (limit,))
+
+    def approve_plan(self, plan_id: str, channel_jid: str) -> dict:
+        """Turn every item without a post into a scheduled draft. Human-triggered only."""
+        plan = self.get_plan(plan_id=plan_id)
+        if not plan:
+            raise ValueError("الخطة غير موجودة")
+        if plan["status"] == "approved":
+            return {"plan_id": plan_id, "created": 0, "already": True}
+        created, skipped = [], 0
+        for item in plan["items"]:
+            if item.get("post_id"):
+                skipped += 1
+                continue
+            kind = item["kind"] if item["kind"] in self.PLAN_KINDS else "text"
+            post = self.create_channel_post({
+                "channel_jid": channel_jid,
+                "title": item["title"],
+                "body": item["body"] or item["title"],
+                "media_type": "none" if kind == "text" else kind,
+                "created_by": "agent",
+            })
+            if item.get("slot_at"):
+                self.schedule_post(post["id"], int(item["slot_at"]), approved=True)
+            self._exec("UPDATE crm_plan_items SET post_id = ? WHERE id = ?", (post["id"], item["id"]))
+            created.append(post["id"])
+        self._exec("UPDATE crm_plans SET status='approved', approved_at=?, updated_at=? WHERE id=?",
+                   (_now(), _now(), plan_id))
+        self.notify("content", "اعتُمدت الخطة",
+                    f"{plan['title'] or plan['week_start']} — {len(created)} مسودة", "/ui/plan")
+        return {"plan_id": plan_id, "created": len(created), "posts": created, "skipped": skipped}
 
     # -- topic intelligence (local, no model) -------------------------------
     def content_gaps(self, days: int = 90) -> dict:

@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] — 2026-11-27
+
+### Added
+
+- **Plans as objects**: `crm_plans` / `crm_plan_items` with `crm_save_plan`, `crm_get_plan`
+  and `crm_approve_plan` (idempotent; creates a draft per item and schedules it at `slot_at`).
+  One plan per week; re-saving replaces items; an approved plan is immutable.
+- **`/ui/plan`**: current week with item kinds, local slots, links to the created drafts and a
+  single gold approval action; the Today page gains a plan card.
+- **Sunday digest**: deterministic weekly message (posts, views, average, best type/slot,
+  scheduled count, plan state, top opportunity) sent by a daemon thread at 20:00 local, at
+  most once per six days, via PicoClaw's Telegram bot with a Termux fallback.
+- Strategy skill now mandates: save the plan, present it from storage, and approve only on an
+  explicit approval word.
+
 ## [3.5.2] — 2026-11-27
 
 ### Changed

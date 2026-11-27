@@ -24,6 +24,7 @@ INSTRUCTIONS = (
     "جهات اتصال وصفقات ومتابعات، وقياسات القناة. "
     "للتحليل استخدم content_gaps وcontent_insights وposting_times قبل اقتراح أي خطة. "
     "قبل اختراع زاوية جديدة، ابحث في الأرشيف بـsemantic_search وأعد استخدام ما نجح. "
+    "لخطة أسبوع: احفظها بـcrm_save_plan ثم اعرضها؛ لا تستدعِ crm_approve_plan إلا بعد موافقة صريحة. "
     "أنشئ مسودة بـ crm_create_channel_post ثم اقترح وقتًا بـ content_schedule — "
     "النشر النهائي قرار بشري من الواجهة."
 )
@@ -155,6 +156,61 @@ TOOLS = [
                 "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
             },
             "required": ["query"],
+        },
+    },
+    {
+        "name": "crm_save_plan",
+        "description": "Save (or replace) the proposed content plan for a week. Each item: title, "
+                       "body, kind (text/image/video/audio/file/link), goal, slot_at 'YYYY-MM-DD HH:MM'. "
+                       "Nothing is published or scheduled until crm_approve_plan is called by a human.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "week_start": {"type": "string", "description": "YYYY-MM-DD (any day of that week)"},
+                "title": {"type": "string"},
+                "notes": {"type": "string"},
+                "items": {
+                    "type": "array", "minItems": 1, "maxItems": 14,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string"},
+                            "body": {"type": "string"},
+                            "kind": {"type": "string",
+                                     "enum": ["text", "image", "video", "audio", "file", "link"]},
+                            "goal": {"type": "string",
+                                     "enum": ["awareness", "engagement", "conversion"]},
+                            "slot_at": {"type": "string", "description": "local 'YYYY-MM-DD HH:MM'"},
+                        },
+                        "required": ["title"],
+                    },
+                },
+            },
+            "required": ["week_start", "items"],
+        },
+    },
+    {
+        "name": "crm_get_plan",
+        "description": "Read a weekly plan with its items and status (latest when no id/week given).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "plan_id": {"type": "string"},
+                "week_start": {"type": "string", "description": "YYYY-MM-DD"},
+            },
+        },
+    },
+    {
+        "name": "crm_approve_plan",
+        "description": "HUMAN ONLY: turn every plan item into a draft (scheduled at its slot) and "
+                       "mark the plan approved. Call it only after the owner explicitly approves.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "plan_id": {"type": "string"},
+                "channelJid": {"type": "string", "description": "defaults to the configured channel"},
+            },
+            "required": ["plan_id"],
         },
     },
     {
@@ -396,6 +452,26 @@ class McpServer:
 
     def _tool_content_insights(self, args: dict) -> dict:
         return self.crm.content_insights(int(args.get("days") or 30))
+
+    def _tool_crm_save_plan(self, args: dict) -> dict:
+        return self.crm.save_plan(
+            week_start=args.get("week_start") or "",
+            items=args.get("items") or [],
+            title=args.get("title") or "",
+            notes=args.get("notes") or "")
+
+    def _tool_crm_get_plan(self, args: dict) -> dict:
+        plan = self.crm.get_plan(plan_id=args.get("plan_id"), week_start=args.get("week_start"))
+        return plan or {"plan": None}
+
+    def _tool_crm_approve_plan(self, args: dict) -> dict:
+        plan_id = args.get("plan_id") or ""
+        if not plan_id:
+            raise McpError(-32602, "plan_id is required")
+        channel = args.get("channelJid") or self.crm.default_channel()
+        if not channel:
+            raise McpError(-32602, "no channel configured")
+        return self.crm.approve_plan(plan_id, channel)
 
     def _tool_content_gaps(self, args: dict) -> dict:
         return self.crm.content_gaps(int(args.get("days") or 90))

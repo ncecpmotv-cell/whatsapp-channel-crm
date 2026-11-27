@@ -19,6 +19,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0011](0011-doctor-script.md) | `doctor.sh`: one command that tells the truth | shipped | R-20 |
 | [0012](0012-topic-intelligence.md) | Topic gaps + BM25 search over the archive | shipped | R-21 |
 | [0013](0013-edge-mcp.md) | edge-mcp: cloud tools that keep the phone light | shipped* | R-22 |
+| [0014](0014-weekly-plan-and-digest.md) | Weekly plan object, one-tap approval, Sunday digest | shipped | R-23 |
 
 ## Adding one
 

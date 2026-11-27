@@ -402,7 +402,7 @@ def badge(status: str) -> str:
 
 # ------------------------------------------------------------------ dashboard
 def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
-              unread: int, metrics: dict) -> bytes:
+              unread: int, metrics: dict, plan: dict | None = None) -> bytes:
     def stat(k, v) -> str:
         zero = " zero" if str(v) in ("0", "") else ""
         return f'<div class="stat{zero}"><b>{esc(v)}</b><span>{esc(k)}</span></div>'
@@ -433,9 +433,20 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
         for f in followups
     ) or '<p class="muted">لا متابعات مستحقة.</p>'
     total = metrics.get("total", {})
+    plan_card = ""
+    if plan:
+        count = len(plan.get("items") or [])
+        state = "معتمدة" if plan.get("status") == "approved" else "مقترحة"
+        plan_card = (
+            f'<a class="card plan-card" href="/ui/plan">'
+            f'<div class="row"><div class="stack"><b>خطة الأسبوع {esc(plan["week_start"])}</b>'
+            f'<span class="muted">{count} عناصر · {state}</span></div>'
+            f'<span class="badge {"scheduled" if plan.get("status") == "approved" else "draft"}">{state}</span>'
+            f'</div></a>')
     body = f"""
 <h1>لوحة اليوم</h1>
 <div class="grid">{cards}</div>
+{plan_card}
 <h2>أرقام القناة — {esc(total.get("posts", 0))} منشورًا</h2>
 <div class="grid">
   {stat("مشاهدات", total.get("views", 0))}
@@ -602,6 +613,45 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
 {pager}
 """
     return page("المحتوى", body, "content")
+
+PLAN_KIND_AR = {"text": "نص", "image": "صورة", "video": "فيديو", "audio": "صوت",
+                "file": "ملف", "link": "رابط"}
+PLAN_GOAL_AR = {"awareness": "وعي", "engagement": "تفاعل", "conversion": "تحويل"}
+
+
+def plan_page(plan: dict | None, notice: str = "") -> bytes:
+    if not plan:
+        body = ("<h1>خطة الأسبوع</h1>"
+                '<p class="muted">لا خطة بعد — اطلب من الوكيل «خطة الأسبوع القادم».</p>')
+        return page("الخطة", body, "today")
+    rows = []
+    for item in plan.get("items") or []:
+        post = item.get("post_id")
+        link = (f'<a class="muted" href="/ui/post/{esc(post)}">فتح المسودة ←</a>' if post
+                else '<span class="muted">لم تُنشأ بعد</span>')
+        slot = fmt_ts(item.get("slot_at")) if item.get("slot_at") else "بلا وقت"
+        rows.append(
+            f'<div class="card plan-item"><div class="row"><div class="stack" style="flex:1">'
+            f'<b>{esc(item.get("title") or "بدون عنوان")}</b>'
+            f'<span class="muted">{esc(PLAN_KIND_AR.get(item.get("kind"), item.get("kind")))}'
+            f' · {esc(slot)}'
+            f'{" · " + esc(PLAN_GOAL_AR.get(item.get("goal"), item.get("goal"))) if item.get("goal") else ""}</span>'
+            f'</div>{link}</div></div>')
+    state = "معتمدة" if plan.get("status") == "approved" else "مقترحة — بانتظار اعتمادك"
+    approve = ""
+    if plan.get("status") != "approved":
+        approve = (f'<form method="post" action="/ui/plan/approve" '
+                   f'data-confirm="اعتماد الخطة ينشئ مسودات مجدولة لكل عنصر. متابعة؟">'
+                   f'<input type="hidden" name="id" value="{esc(plan["id"])}">'
+                   f'<button>اعتماد الخطة وإنشاء المسودات</button></form>')
+    body = f"""
+<h1>خطة الأسبوع {esc(plan["week_start"])}</h1>
+<p class="muted">{esc(state)}{" · " + esc(plan.get("notes")) if plan.get("notes") else ""}</p>
+{approve}
+{''.join(rows) or '<p class="muted">لا عناصر.</p>'}
+"""
+    return page("الخطة", body, "today")
+
 
 def contacts_page(contacts: list[dict]) -> bytes:
     rows = "".join(f"""

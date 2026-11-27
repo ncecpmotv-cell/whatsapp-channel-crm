@@ -83,6 +83,7 @@ types and proposed times, all in `draft`.
 | R-20 | `doctor.sh` health sweep for developers | v3.3.0 | [0011](docs/features/0011-doctor-script.md) |
 | R-21 | Topic intelligence: `content_gaps` + `semantic_search` | v3.4.0 | [0012](docs/features/0012-topic-intelligence.md) |
 | R-22 | `edge-mcp` Worker: extract + search over MCP | v3.5.0 | [0013](docs/features/0013-edge-mcp.md) |
+| R-23 | Weekly plan object + approval + Sunday digest | v3.6.0 | [0014](docs/features/0014-weekly-plan-and-digest.md) |
 
 ---
 

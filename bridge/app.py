@@ -440,6 +440,7 @@ class Handler(BaseHTTPRequestHandler):
         "cancelled": "أُلغي العنصر — بقي في الأرشيف بحالة ملغى.",
         "restored": "أُعيد العنصر كمسودة.",
         "status": "حُدِّثت الحالة.",
+        "plan_approved": "اعتُمدت الخطة — أُنشئت المسودات وأُجيدلت مواعيدها.",
     }
 
     def _ui_get(self, path: str, query: dict):
@@ -454,7 +455,10 @@ class Handler(BaseHTTPRequestHandler):
             scheduled.sort(key=lambda p: p.get("scheduled_at") or 0)
             return self._send_html(200, ui.dashboard(
                 stats=crm.stats(), scheduled=scheduled, followups=crm.followups(0),
-                unread=crm.unread_count(), metrics=crm.channel_metrics(7)))
+                unread=crm.unread_count(), metrics=crm.channel_metrics(7),
+                plan=crm.get_plan()))
+        if path == "/ui/plan":
+            return self._send_html(200, ui.plan_page(crm.get_plan()))
         if path == "/ui/notifications":
             return self._send_html(200, ui.notifications_page(crm.notifications(60)))
         if path == "/ui/content":
@@ -776,6 +780,14 @@ class Handler(BaseHTTPRequestHandler):
                 crm.upsert_deal(form["title"], contact_id=contact_id, value=value,
                                 stage=form.get("stage"))
             return self._redirect("/ui/deals")
+        if path == "/ui/plan/approve":
+            form = ui.parse_form(raw)
+            plan_id = form.get("id") or ""
+            try:
+                crm.approve_plan(plan_id, crm.default_channel())
+                return self._redirect("/ui/plan?ok=plan_approved")
+            except (ValueError, PermissionError):
+                return self._redirect("/ui/plan?error=plan")
         if path == "/ui/notifications/read":
             self.bridge.crm.mark_notifications_read()
             return self._redirect("/ui/notifications")
