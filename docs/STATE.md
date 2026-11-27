@@ -46,6 +46,8 @@ edge/ (في الريبو)      Worker بلا حالة: edge_web_extract · edge_
 - **edge-mcp** منشور على Cloudflare: `https://edge-mcp.fixed-friend.workers.dev` — 3 أدوات
   (extract/search/status)، مسجّل في PicoClaw كخادم MCP ثانٍ. مُتحقَّق من الجوال عبر الوكيل:
   استخراج example.com (172 حرفًا) + `content_gaps` في نفس الدور.
+- **بحث ويب أصلي في PicoClaw**: `tools.web.tavily` مفعّل بمفتاح Tavily (1000 استعلام/شهر)،
+  والمزوّد `tavily` بدل `sogou`. مُتحقَّق عبر الوكيل: 3 نتائج حقيقية بروابط في ~25 ثانية.
 - PicoClaw: مهارة `content-strategist` مثبّتة، وMCP `crm` مسجّل.
 - الاقتران: `is_logged_in:true` للرقم `966502369637` — بلا QR بعد نقل `storages/`.
 - `doctor.sh`: **22 فحصًا ناجحًا · 0 فشل**.
@@ -81,8 +83,9 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 
 ## مفتوح الآن
 
-- **مفتاح بحث**: `edge_search` يعمل لكن بلا مفتاح Tavily/Brave يعيد صفرًا (DuckDuckGo يحجب
-  مراكز البيانات). المطلوب: `npx wrangler secret put TAVILY_API_KEY` ثم إعادة نشر.
+- **تكرار أدوات**: PicoClaw يملك الآن `web_search` أصليًا + `web_fetch`، فـ`edge_search`
+  و`edge_web_extract` صارا احتياطًا. القيمة المتبقية للـWorker: Google OAuth مستقبلًا.
+  قرار: نُبقيه أو نُلغي تسجيله لتوفير سياق — يُحسم عند إضافة أدوات Google.
 - **إشعارات تليجرام**: بانتظار `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (Termux:API يعمل).
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.

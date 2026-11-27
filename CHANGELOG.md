@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.2] — 2026-11-27
+
+### Changed
+
+- PicoClaw now searches natively: `tools.web.tavily` enabled with a Tavily key
+  (1,000 queries/month), provider switched from `sogou` to `tavily`. Verified through the
+  agent on the phone — three real results with links in ~25 s.
+- Consequence recorded in STATE: with native `web_search` and `web_fetch`, the edge Worker's
+  search/extract become a fallback; its remaining value is Google OAuth later, so the
+  keep-or-unregister decision waits for that step.
+
 ## [3.5.1] — 2026-11-27
 
 ### Changed
