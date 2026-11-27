@@ -89,6 +89,9 @@ Report vulnerabilities per [`SECURITY.md`](SECURITY.md).
 
 ## Documentation
 
+**Starting a new session? Read [`docs/STATE.md`](docs/STATE.md) first** — where it runs, the
+paths, what is verified, the decisions and the next three tasks.
+
 Start at the hub: **[`docs/README.md`](docs/README.md)** — every guide, every feature record
 and the roadmap in one place.
 
