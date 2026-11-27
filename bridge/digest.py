@@ -66,6 +66,7 @@ def build_digest(crm, days: int = 7) -> str:
     total = metrics.get("total") or {}
     posts = int(total.get("posts") or 0)
     views = int(total.get("views") or 0)
+    average = round(views / posts, 1) if posts else 0
     gaps = crm.content_gaps(90)
     plan = crm.get_plan()
     scheduled = crm.count_posts("scheduled")
@@ -73,7 +74,7 @@ def build_digest(crm, days: int = 7) -> str:
     opportunity = (gaps.get("opportunities") or [{}])[0]
 
     lines = [f"📊 تقرير الأسبوع — {dt.datetime.utcfromtimestamp(time.time()).strftime('%Y-%m-%d')}", ""]
-    lines.append(f"• المنشورات: {posts} · المشاهدات: {views} · المتوسط: {total.get('avg_views', 0)}")
+    lines.append(f"• المنشورات: {posts} · المشاهدات: {views} · المتوسط: {average}")
     if top_type.get("type"):
         lines.append(f"• أفضل نوع: {top_type['type']} ({top_type.get('avg_views')} مشاهدة)")
     best = (crm.posting_times(90).get("best") or [{}])[0]
@@ -103,7 +104,12 @@ def send_telegram(token: str, chat: str, text: str, timeout: float = 8.0) -> boo
         f"https://api.telegram.org/bot{token}/sendMessage", data=data, method="POST")
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
-            return bool(json.loads(response.read(400)).get("ok"))
+            body = response.read()
+        try:
+            return bool(json.loads(body).get("ok"))
+        except ValueError:
+            # a truncated read used to fail here; a 2xx without parseable JSON is still a send
+            return 200 <= getattr(response, "status", 200) < 300
     except Exception as exc:  # network / auth: never break the caller
         log.warning("telegram digest failed: %s", exc)
         return False
