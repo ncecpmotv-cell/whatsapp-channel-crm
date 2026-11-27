@@ -46,6 +46,10 @@ class Config:
     gowa_user: str = ""
     gowa_password: str = ""
     tz_offset: int = 3  # Asia/Riyadh; container clocks are UTC
+    # Where the UI is reachable when a reverse proxy rewrites Host (tailscale serve).
+    public_base_url: str = ""
+    trusted_origins: str = ""
+    allow_tailnet_domain: str = ""
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -92,6 +96,9 @@ class Config:
             gowa_user=get("GOWA_USER"),
             gowa_password=get("GOWA_PASSWORD"),
             tz_offset=get_int("APP_TZ_OFFSET", 3),
+            public_base_url=get("PUBLIC_BASE_URL"),
+            trusted_origins=get("TRUSTED_ORIGINS"),
+            allow_tailnet_domain=get("ALLOW_TAILNET_DOMAIN"),
         )
         cfg.validate()
         return cfg
@@ -113,5 +120,5 @@ _KNOWN_KEYS = {
     "BRIDGE_TOKEN", "NEWSLETTER_JIDS", "DEFAULT_COUNTRY_CODE", "CRM_DB_PATH",
     "BRIDGE_POLL_INTERVAL", "BRIDGE_CHANNEL_SYNC_INTERVAL", "BRIDGE_LOG_LEVEL",
     "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP", "GOWA_USER", "GOWA_PASSWORD",
-    "APP_TZ_OFFSET",
+    "APP_TZ_OFFSET", "PUBLIC_BASE_URL", "TRUSTED_ORIGINS", "ALLOW_TAILNET_DOMAIN",
 }

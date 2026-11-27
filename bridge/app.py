@@ -73,7 +73,7 @@ def origin_allowed(headers, env=None) -> bool:
     """
     env = os.environ if env is None else env
     site = (headers.get("Sec-Fetch-Site") or "").lower()
-    if site and site not in ("same-origin", "none"):
+    if site and site not in ("same-origin", "same-site", "none"):
         return False
     origin = (headers.get("Origin") or "").strip()
     if not origin:
@@ -90,7 +90,16 @@ def origin_allowed(headers, env=None) -> bool:
         for item in (env.get(key) or "").split(","):
             candidates.add(_host_key(item))
     candidates.discard("")
-    return wanted in candidates
+    if wanted in candidates:
+        return True
+    # MagicDNS names in the same tailnet (smartp, pot-lx1af, …): the owner may
+    # open the UI under any of them, and the proxy rewrites Host either way.
+    domain = (env.get("ALLOW_TAILNET_DOMAIN") or "").strip().lower().lstrip(".")
+    if domain:
+        hostname = wanted.rsplit(":", 1)[0]
+        if hostname == domain or hostname.endswith("." + domain):
+            return True
+    return False
 
 
 def image_dimensions(data: bytes) -> tuple[int, int] | None:
@@ -234,7 +243,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _same_origin(self) -> bool:
         """Blocks cross-site form posts (Basic credentials ride along)."""
-        return origin_allowed(self.headers)
+        cfg = self.bridge.cfg
+        return origin_allowed(self.headers, {
+            "PUBLIC_BASE_URL": cfg.public_base_url,
+            "TRUSTED_ORIGINS": cfg.trusted_origins,
+            "ALLOW_TAILNET_DOMAIN": cfg.allow_tailnet_domain,
+        })
 
     def log_message(self, fmt, *args):
         log.info("%s - %s", self.address_string(), fmt % args)
@@ -357,8 +371,14 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
 
         if path == "/health":
+            cfg = self.bridge.cfg
+            # Booleans only: enough to debug the origin guard through a proxy.
+            guard = {"public_url": bool(cfg.public_base_url),
+                     "trusted": bool(cfg.trusted_origins),
+                     "tailnet": bool(cfg.allow_tailnet_domain)}
             return self._send(200, {"ok": self.bridge.crm.ping(),
-                                    "crm": self.bridge.crm.ping()})
+                                    "crm": self.bridge.crm.ping(),
+                                    "origin_guard": guard})
         if path == "/status":
             if not self._bearer_ok():
                 return self._send(401, {"error": "unauthorized"})
@@ -536,6 +556,10 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_basic():
                 return None
             if not self._same_origin():
+                log.warning(
+                    "origin rejected: path=%s origin=%r host=%r xfh=%r site=%r",
+                    path, self.headers.get("Origin"), self.headers.get("Host"),
+                    self.headers.get("X-Forwarded-Host"), self.headers.get("Sec-Fetch-Site"))
                 return self._send(403, {"error": "cross-site request rejected"})
             if not self._csrf_ok(raw):
                 return self._send(403, {"error": "invalid csrf token"})

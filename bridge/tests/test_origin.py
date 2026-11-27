@@ -8,6 +8,26 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app import origin_allowed  # noqa: E402
 
 
+class ConfigOriginTest(unittest.TestCase):
+    def test_proxy_settings_are_read_from_the_env_file(self):
+        """The UI settings live in the env file, not in os.environ."""
+        import tempfile
+        from config import Config
+
+        path = tempfile.mktemp()
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("GOWA_WEBHOOK_SECRET=s\nBRIDGE_TOKEN=t\n"
+                     "PUBLIC_BASE_URL=https://smartp.tail16a0c8.ts.net\n"
+                     "ALLOW_TAILNET_DOMAIN=tail16a0c8.ts.net\n")
+        cfg = Config.load(path)
+        self.assertEqual(cfg.public_base_url, "https://smartp.tail16a0c8.ts.net")
+        self.assertEqual(cfg.allow_tailnet_domain, "tail16a0c8.ts.net")
+        h = {"Host": "127.0.0.1:8085", "Origin": "https://smartp.tail16a0c8.ts.net"}
+        self.assertTrue(origin_allowed(h, {
+            "PUBLIC_BASE_URL": cfg.public_base_url,
+            "ALLOW_TAILNET_DOMAIN": cfg.allow_tailnet_domain}))
+
+
 class OriginTest(unittest.TestCase):
     def test_no_origin_is_allowed(self):
         self.assertTrue(origin_allowed({"Host": "127.0.0.1:8085"}, {}))
@@ -39,6 +59,20 @@ class OriginTest(unittest.TestCase):
         h = {"Host": "127.0.0.1:8085", "Origin": "https://crm.example.test"}
         env = {"TRUSTED_ORIGINS": "https://a.test, https://crm.example.test"}
         self.assertTrue(origin_allowed(h, env))
+
+    def test_tailnet_domain_is_allowed(self):
+        h = {"Host": "127.0.0.1:8085", "Origin": "https://pot-lx1af.tail16a0c8.ts.net"}
+        self.assertTrue(origin_allowed(h, {"ALLOW_TAILNET_DOMAIN": "tail16a0c8.ts.net"}))
+
+    def test_tailnet_domain_suffix_cannot_be_spoofed(self):
+        h = {"Host": "127.0.0.1:8085", "Origin": "https://evil-tail16a0c8.ts.net"}
+        self.assertFalse(origin_allowed(h, {"ALLOW_TAILNET_DOMAIN": "tail16a0c8.ts.net"}))
+        h = {"Host": "127.0.0.1:8085", "Origin": "https://tail16a0c8.ts.net.evil.com"}
+        self.assertFalse(origin_allowed(h, {"ALLOW_TAILNET_DOMAIN": "tail16a0c8.ts.net"}))
+
+    def test_same_site_fetch_is_allowed(self):
+        h = {"Host": "127.0.0.1:8085", "Sec-Fetch-Site": "same-site"}
+        self.assertTrue(origin_allowed(h, {}))
 
     def test_foreign_origin_is_rejected(self):
         h = {"Host": "smartp.tail16a0c8.ts.net", "Origin": "https://evil.example"}

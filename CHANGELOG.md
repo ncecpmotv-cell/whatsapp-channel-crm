@@ -4,7 +4,16 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.1] — 2026-11-27
+## [3.0.2] — 2026-11-27
+
+### Fixed
+
+- The 3.0.1 origin fix did not take effect in production: `PUBLIC_BASE_URL` lived in the env
+  file, but the guard read `os.environ`, which never contains file-only keys. The values are
+  now `Config` fields (`public_base_url`, `trusted_origins`, `allow_tailnet_domain`), read from
+  the file like every other setting.
+- `/health` exposes `origin_guard` booleans; the `crm` unit now has a log service, so a
+  rejection logs the actual `Origin`/`Host`/`Sec-Fetch-Site` instead of failing silently.
 
 ### Fixed
 

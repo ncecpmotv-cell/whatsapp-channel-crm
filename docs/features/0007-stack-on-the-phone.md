@@ -65,6 +65,12 @@ $TS serve --bg --https=443 http://127.0.0.1:8085
 logs `cert refresh: … no TailscaleVarRoot` and HTTPS silently fails. The certificate is issued
 by ACME on first request; `tailscale cert` is a useful probe.
 
+Because the proxy rewrites `Host` to `127.0.0.1:8085`, every form POST carries
+`Origin: https://smartp.tail16a0c8.ts.net` against a different Host. The env file therefore
+sets `PUBLIC_BASE_URL` and `ALLOW_TAILNET_DOMAIN=tail16a0c8.ts.net`, and the guard reads them
+through `Config` — **not** `os.environ`, which contains only variables the process was started
+with. `/health` returns `origin_guard` booleans so this is diagnosable without guessing.
+
 ## Verify
 
 ```bash
