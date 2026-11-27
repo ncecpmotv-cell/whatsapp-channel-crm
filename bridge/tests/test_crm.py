@@ -127,6 +127,18 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(post["status"], "scheduled")
         self.assertEqual(len(self.crm.due_posts()), 1)
 
+    def test_media_plan_items_stay_drafts_until_media_exists(self):
+        plan = self.crm.save_plan("2026-12-21", [
+            {"title": "فيديو بلا ملف", "kind": "video", "slot_at": "2099-01-01 20:00"},
+            {"title": "نص جاهز", "kind": "text", "slot_at": "2099-01-01 21:00"},
+        ])
+        result = self.crm.approve_plan(plan["id"], "1203630@newsletter")
+        self.assertEqual(len(result["needs_media"]), 1)
+        video = self.crm.get_channel_post(result["needs_media"][0])
+        self.assertEqual(video["status"], "draft")      # not scheduled into a failure
+        text_post = [p for p in result["posts"] if p != video["id"]][0]
+        self.assertEqual(self.crm.get_channel_post(text_post)["status"], "scheduled")
+
     def test_content_gaps_finds_opportunities_and_saturation(self):
         """A term that appears once with high views is an opportunity, not a trend."""
         def add(title, body, kind, views, at):

@@ -627,8 +627,12 @@ def plan_page(plan: dict | None, notice: str = "") -> bytes:
     rows = []
     for item in plan.get("items") or []:
         post = item.get("post_id")
-        link = (f'<a class="muted" href="/ui/post/{esc(post)}">فتح المسودة ←</a>' if post
-                else '<span class="muted">لم تُنشأ بعد</span>')
+        if post:
+            link = f'<a class="muted" href="/ui/post/{esc(post)}">فتح المسودة ←</a>'
+            if item.get("kind") in ("image", "video", "audio", "file"):
+                link += '<span class="muted"> · أرفق الوسائط ثم أعد الجدولة</span>'
+        else:
+            link = '<span class="muted">لم تُنشأ بعد</span>'
         slot = fmt_ts(item.get("slot_at")) if item.get("slot_at") else "بلا وقت"
         rows.append(
             f'<div class="card plan-item"><div class="row"><div class="stack" style="flex:1">'

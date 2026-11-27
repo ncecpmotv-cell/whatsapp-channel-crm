@@ -24,6 +24,10 @@ approved, measured or repeated.
 - `crm_approve_plan(plan_id, channelJid?)` — for every item without a post: create a draft,
   schedule it at `slot_at` when present, store `post_id` back on the item. Idempotent
   (second call returns `already: true`).
+  **Media items are the exception:** an image/video/audio/file post with no file is kept as a
+  draft and never scheduled — the agent's own approval run surfaced this ("these two need
+  media or they will fail at publish time"), and scheduling a doomed post is worse than
+  leaving a visible draft. `/ui/plan` says «أرفق الوسائط ثم أعد الجدولة» next to it.
 - The channel defaults to the stored channel profile, then to the last post's channel, so the
   agent never has to know a JID.
 

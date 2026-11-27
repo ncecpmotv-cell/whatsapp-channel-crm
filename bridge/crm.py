@@ -837,7 +837,7 @@ class CrmClient:
             raise ValueError("الخطة غير موجودة")
         if plan["status"] == "approved":
             return {"plan_id": plan_id, "created": 0, "already": True}
-        created, skipped = [], 0
+        created, skipped, needs_media = [], 0, []
         for item in plan["items"]:
             if item.get("post_id"):
                 skipped += 1
@@ -850,15 +850,22 @@ class CrmClient:
                 "media_type": "none" if kind == "text" else kind,
                 "created_by": "agent",
             })
-            if item.get("slot_at"):
+            # A media post with no file would fail at publish time; keep it a draft
+            # until the owner attaches the media, and say so instead of scheduling a dud.
+            if kind in ("image", "video", "audio", "file"):
+                needs_media.append(post["id"])
+            elif item.get("slot_at"):
                 self.schedule_post(post["id"], int(item["slot_at"]), approved=True)
             self._exec("UPDATE crm_plan_items SET post_id = ? WHERE id = ?", (post["id"], item["id"]))
             created.append(post["id"])
         self._exec("UPDATE crm_plans SET status='approved', approved_at=?, updated_at=? WHERE id=?",
                    (_now(), _now(), plan_id))
-        self.notify("content", "اعتُمدت الخطة",
-                    f"{plan['title'] or plan['week_start']} — {len(created)} مسودة", "/ui/plan")
-        return {"plan_id": plan_id, "created": len(created), "posts": created, "skipped": skipped}
+        note = f"{plan['title'] or plan['week_start']} — {len(created)} مسودة"
+        if needs_media:
+            note += f" · {len(needs_media)} بانتظار وسائط"
+        self.notify("content", "اعتُمدت الخطة", note, "/ui/plan")
+        return {"plan_id": plan_id, "created": len(created), "posts": created,
+                "skipped": skipped, "needs_media": needs_media}
 
     # -- topic intelligence (local, no model) -------------------------------
     def content_gaps(self, days: int = 90) -> dict:
