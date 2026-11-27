@@ -18,7 +18,7 @@ import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-BRIDGE_DIR = os.path.expanduser("~/phone-crm/bridge")
+BRIDGE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "bridge")
 sys.path.insert(0, BRIDGE_DIR)
 
 FAKE_PORT = 3911

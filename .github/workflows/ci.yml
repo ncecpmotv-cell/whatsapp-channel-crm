@@ -43,8 +43,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Scan tracked files
         run: |
-          if grep -rInE '(BRIDGE_TOKEN|PICO_TOKEN|GOWA_PASSWORD|WHATSAPP_WEBHOOK_SECRET)=[A-Za-z0-9_\-]{12,}' \
-               --include='*.py' --include='*.sh' --include='*.env*' .; then
-            echo "::error::possible hardcoded secret"; exit 1
+          hits=$(git ls-files -z \
+            | xargs -0 grep -InE '(BRIDGE_TOKEN|PICO_TOKEN|GOWA_PASSWORD|WHATSAPP_WEBHOOK_SECRET)=[A-Za-z0-9_-]{12,}' 2>/dev/null \
+            | grep -vE 'change-me|\.example:' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::possible hardcoded secret"
+            exit 1
           fi
           echo "no hardcoded secrets found"
