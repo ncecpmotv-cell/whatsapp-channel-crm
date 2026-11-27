@@ -75,6 +75,7 @@ types and proposed times, all in `draft`.
 | R-03 | `content_insights` + `posting_times` | v2.1.0 | [0002](docs/features/0002-mcp-analysis-tools.md) |
 | R-04 | One-command installer | v2.0.0 | [0004](docs/features/0004-one-shot-installer.md) |
 | R-05 | Content Strategist skill pack | v2.1.0 | [0005](docs/features/0005-content-strategist-skill.md) |
+| R-15 | Phone start script: idempotent, ordered, honest | v2.1.1 | [0006](docs/features/0006-phone-start-script.md) |
 
 ---
 

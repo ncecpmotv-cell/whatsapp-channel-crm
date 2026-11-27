@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-11-27
+
+### Fixed
+
+- Reboot recovery on the phone: `scripts/termux-start.sh` replaces a naive `start.sh`.
+  It is idempotent, starts GOWA → CRM → PicoClaw with health waits, refuses to start a
+  local gateway when the config points at a remote one, prints a status line per service
+  and exits non-zero when something is down. `sh` invocations re-exec under bash.
+
 ## [2.1.0] — 2026-11-27
 
 ### Added
