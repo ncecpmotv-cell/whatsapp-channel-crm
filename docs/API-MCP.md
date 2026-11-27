@@ -59,7 +59,7 @@ curl -s -X POST http://127.0.0.1:8085/hook/publish \
 
 ## MCP server
 
-JSON-RPC 2.0 at `POST /mcp`. 14 tools:
+JSON-RPC 2.0 at `POST /mcp`. 16 tools:
 
 | Tool | What it does |
 |---|---|
@@ -71,6 +71,8 @@ JSON-RPC 2.0 at `POST /mcp`. 14 tools:
 | `crm_list_ready_posts` | Scheduled posts awaiting their time |
 | `channel_info` | Channel name, jid, subscribers, invite |
 | `channel_metrics` | Views/forwards/reactions per post and in total |
+| `content_insights` | Per-type averages, engagement rate, cadence, top 5 and weakest 3 in a window — the analysis tool for planning |
+| `posting_times` | Best weekday/hour pairs by average views (local time) and the weakest buckets |
 | `contact_upsert` | Create or update a contact |
 | `deal_update` | Create or move a deal |
 | `followups_due` | Due follow-ups |

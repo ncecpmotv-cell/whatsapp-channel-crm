@@ -22,6 +22,7 @@ SERVER_INFO = {"name": "phone-crm-mcp", "version": "2.0.0"}
 INSTRUCTIONS = (
     "CRM قناة واتساب على الجوال: محتوى (draft → معتمد/مجدول → published)، "
     "جهات اتصال وصفقات ومتابعات، وقياسات القناة. "
+    "للتحليل استخدم content_insights وposting_times قبل اقتراح أي خطة. "
     "أنشئ مسودة بـ crm_create_channel_post ثم اقترح وقتًا بـ content_schedule — "
     "النشر النهائي قرار بشري من الواجهة."
 )
@@ -109,6 +110,28 @@ TOOLS = [
         "inputSchema": {
             "type": "object",
             "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 90, "default": 30}},
+        },
+    },
+    {
+        "name": "content_insights",
+        "description": "What worked in the last N days: totals, per-type averages, engagement "
+                       "rate, cadence per week, the top 5 posts and the weakest 3.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 30}},
+        },
+    },
+    {
+        "name": "posting_times",
+        "description": "Best weekday/hour pairs by average views (local time), plus the weakest "
+                       "buckets — use it to choose publishing slots.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 90},
+                "tz_offset": {"type": "integer", "minimum": -12, "maximum": 14,
+                              "description": "hours from UTC; defaults to TZ_OFFSET"},
+            },
         },
     },
     {
@@ -347,6 +370,14 @@ class McpServer:
 
     def _tool_channel_metrics(self, args: dict) -> dict:
         return self.crm.channel_metrics(int(args.get("days") or 7))
+
+    def _tool_content_insights(self, args: dict) -> dict:
+        return self.crm.content_insights(int(args.get("days") or 30))
+
+    def _tool_posting_times(self, args: dict) -> dict:
+        offset = args.get("tz_offset")
+        return self.crm.posting_times(int(args.get("days") or 90),
+                                      None if offset is None else int(offset))
 
     def _tool_contact_upsert(self, args: dict) -> dict:
         if not args.get("phone"):

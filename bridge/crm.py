@@ -14,7 +14,9 @@ post into `scheduled` is a human approval (or an explicitly privileged token).
 """
 from __future__ import annotations
 
+import datetime as dt
 import json
+import os
 import time
 import uuid
 
@@ -141,6 +143,13 @@ CONTACT_STAGES = ("lead", "qualified", "customer", "partner", "cold")
 
 def _now() -> int:
     return int(time.time())
+
+
+def _tz_offset() -> int:
+    try:
+        return int(os.environ.get("TZ_OFFSET", "0"))
+    except ValueError:
+        return 0
 
 
 def _row(row) -> dict | None:
@@ -550,6 +559,83 @@ class CrmClient:
             "posts": len(rows),
         }
         return {"days": days, "total": total, "posts": rows}
+
+    def content_insights(self, days: int = 30) -> dict:
+        """Aggregate what worked: per type, cadence, best and worst posts."""
+        since = _now() - max(1, days) * 86400
+        rows = self._all(
+            "SELECT id, title, substr(body, 1, 90) AS body, media_type, published_at, "
+            "views, forwards, reactions FROM crm_posts "
+            "WHERE status='published' AND COALESCE(published_at, updated_at) >= ? "
+            "ORDER BY COALESCE(views, 0) DESC", (since,))
+        if not rows:
+            return {"days": days, "posts": 0, "note": "لا منشورات منشورة في هذه الفترة"}
+
+        def rate(views: float, forwards: float, reactions: float) -> float:
+            return round((forwards + reactions) * 100 / views, 2) if views else 0.0
+
+        total: dict[str, float] = {"posts": len(rows),
+                 "views": sum(r["views"] or 0 for r in rows),
+                 "forwards": sum(r["forwards"] or 0 for r in rows),
+                 "reactions": sum(r["reactions"] or 0 for r in rows)}
+        total["avg_views"] = round(total["views"] / total["posts"], 1)
+        total["engagement_pct"] = rate(total["views"], total["forwards"], total["reactions"])
+
+        by_type: dict[str, dict] = {}
+        for row in rows:
+            key = row.get("media_type") or "text"
+            bucket = by_type.setdefault(
+                key, {"posts": 0, "views": 0, "forwards": 0, "reactions": 0})
+            bucket["posts"] += 1
+            bucket["views"] += row["views"] or 0
+            bucket["forwards"] += row["forwards"] or 0
+            bucket["reactions"] += row["reactions"] or 0
+        for bucket in by_type.values():
+            bucket["avg_views"] = round(bucket["views"] / bucket["posts"], 1)
+            bucket["engagement_pct"] = rate(
+                bucket["views"], bucket["forwards"], bucket["reactions"])
+
+        def brief(row: dict) -> dict:
+            return {"id": row["id"], "title": row.get("title") or (row.get("body") or "")[:60],
+                    "type": row.get("media_type") or "text", "views": row["views"] or 0,
+                    "forwards": row["forwards"] or 0, "reactions": row["reactions"] or 0,
+                    "engagement_pct": rate(row["views"] or 0, row["forwards"] or 0,
+                                           row["reactions"] or 0)}
+
+        return {
+            "days": days,
+            "posts": len(rows),
+            "total": total,
+            "by_type": by_type,
+            "top": [brief(r) for r in rows[:5]],
+            "bottom": [brief(r) for r in reversed(rows[-3:])],
+            "cadence_per_week": round(len(rows) / max(1, days / 7), 1),
+        }
+
+    def posting_times(self, days: int = 90, tz_offset: int | None = None) -> dict:
+        """Which weekday/hour pairs actually collected views (local time)."""
+        offset = _tz_offset() if tz_offset is None else int(tz_offset)
+        since = _now() - max(1, days) * 86400
+        rows = self._all(
+            "SELECT published_at, views, forwards, reactions FROM crm_posts "
+            "WHERE status='published' AND published_at IS NOT NULL AND published_at >= ?",
+            (since,))
+        days_ar = ["الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+        buckets: dict[tuple[int, int], dict] = {}
+        for row in rows:
+            local = dt.datetime.utcfromtimestamp(int(row["published_at"])) + dt.timedelta(hours=offset)
+            key = (local.weekday(), local.hour)
+            bucket = buckets.setdefault(key, {"posts": 0, "views": 0})
+            bucket["posts"] += 1
+            bucket["views"] += row["views"] or 0
+        ranked = [
+            {"weekday": days_ar[wd], "hour": hour, "posts": b["posts"],
+             "avg_views": round(b["views"] / b["posts"], 1)}
+            for (wd, hour), b in buckets.items()
+        ]
+        ranked.sort(key=lambda x: (-x["avg_views"], -x["posts"]))
+        return {"days": days, "tz_offset": offset, "buckets": len(ranked),
+                "best": ranked[:8], "worst": ranked[-3:] if len(ranked) > 3 else []}
 
     # -- history / channel profile -----------------------------------------
     def record_stats(self, post_id: str) -> None:

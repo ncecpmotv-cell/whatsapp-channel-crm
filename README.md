@@ -25,7 +25,7 @@ This project does exactly that, and nothing else. No PHP, no MariaDB, no Node ru
 
 | Piece | Role |
 |---|---|
-| **CRM bridge** (Python stdlib + SQLite) | Content pipeline, contacts, deals, metrics, Arabic web UI, MCP server |
+| **CRM bridge** (Python stdlib + SQLite) | Content pipeline, contacts, deals, metrics, Arabic web UI, MCP server (16 tools) |
 | **[GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice)** | Pairs with WhatsApp, sends channel posts, delivers inbound DMs |
 | **[PicoClaw](https://github.com/sipeed/picoclaw)** | Personal agent runtime; talks to the CRM through MCP tools |
 | **Tailscale** (optional) | Private HTTPS access to the UI from your phone or laptop |

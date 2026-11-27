@@ -13,6 +13,8 @@ EspoCRM-based bridge entirely.
 
 ### Added
 
+- Analysis tools for the agent: `content_insights` (per-type averages, engagement,
+  cadence, best/worst posts) and `posting_times` (weekday/hour performance).
 - Content pipeline with four states (draft, approved/scheduled, published, cancelled),
   manual transitions, cancellation that keeps the record, and purge for cancelled items only.
 - Arabic RTL mobile UI: progressive disclosure panels, filter chips, single primary action,

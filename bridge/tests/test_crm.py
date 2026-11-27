@@ -39,6 +39,29 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(row["status"], "published")
         self.assertEqual(row["message_id"], "MID1")
 
+    def test_content_insights(self):
+        now = int(__import__("time").time())
+        for kind, views, forwards, reactions, hour in (
+                ("text", 100, 10, 5, 9), ("text", 50, 0, 0, 10), ("video", 300, 30, 15, 21)):
+            post = self.crm.create_channel_post(
+                {"channel_jid": "1@newsletter", "body": f"b{hour}", "media_type": kind})
+            self.crm.update_channel_post(post["id"], {
+                "status": "published", "published_at": now - 4 * 86400 + hour * 3600,
+                "message_id": f"M{hour}"})
+            self.crm.update_counters(post["id"], views, forwards, reactions)
+        insights = self.crm.content_insights(30)
+        self.assertEqual(insights["posts"], 3)
+        self.assertEqual(insights["total"]["views"], 450)
+        self.assertEqual(insights["by_type"]["video"]["avg_views"], 300.0)
+        self.assertEqual(insights["by_type"]["text"]["posts"], 2)
+        self.assertEqual(insights["top"][0]["views"], 300)
+        self.assertEqual(insights["bottom"][0]["views"], 50)
+
+        times = self.crm.posting_times(30, tz_offset=0)
+        self.assertEqual(times["buckets"], 3)
+        self.assertEqual(times["best"][0]["avg_views"], 300.0)
+        self.assertGreaterEqual(times["best"][0]["avg_views"], times["best"][-1]["avg_views"])
+
     def test_status_guard(self):
         post = self.crm.create_channel_post({"channel_jid": "1@newsletter", "body": "x"})
         with self.assertRaises(PermissionError):
