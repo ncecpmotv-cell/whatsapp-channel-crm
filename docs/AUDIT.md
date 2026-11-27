@@ -19,7 +19,7 @@
 | 2 | **عالية** | قبول `?token=` للمصادقة → التوكن يُكتب في سجل الطلبات وتاريخ المتصفح | `_basic_ok` يقرأ `query["token"]` | **أُصلح**: أُلغي؛ `GET /ui?token=…` → 401 (curl يستخدم `-u`) |
 | 3 | **عالية** | `/status` بلا مصادقة يكشف معرّفات القنوات والإحصاءات | `do_GET` | **أُصلح**: يتطلب Bearer → 401 بدونه، 200 معه |
 | 4 | متوسطة | لا ترويسات أمان (CSP/X-Frame/Referrer/nosniff) | غيابها في الردود | **أُصلح** في `_send_bytes`: CSP + nosniff + DENY + no-referrer + Permissions-Policy |
-| 5 | متوسطة | CSRF: نماذج POST تحمل اعتماد Basic تلقائيًا من المتصفح | لا فحص Origin/Sec-Fetch-Site | **أُصلح**: `_same_origin`؛ طلب `Sec-Fetch-Site: cross-site` → 403 (مُختبر) |
+| 5 | متوسطة | CSRF: نماذج POST تحمل اعتماد Basic تلقائيًا من المتصفح | لا فحص Origin/Sec-Fetch-Site | **أُصلح**: `origin_allowed`؛ طلب `Sec-Fetch-Site: cross-site` أو Origin غريب → 403، وOrigin المطابق لـ`X-Forwarded-Host`/`PUBLIC_BASE_URL` يمرّ عبر الوكيل (tailscale serve) — 9 اختبارات |
 | 6 | متوسطة | امتداد الملف المرفوع غير مقيّد (`.exe` باسم صورة) | `os.path.splitext(filename)` | **أُصلح**: قائمة بيضاء لكل نوع؛ `evil.exe` → `error=media_type` ولم يُنشأ منشور |
 | 7 | منخفضة | `?days=abc` في `/ui/metrics` يرفع استثناء 500 | `int(query["days"])` | **أُصلح**: try/except + حصر 1..365 |
 | 8 | منخفضة | نص مكرر/خاطئ في صفحة القناة: «منشور منشور» و«1 مشتركون» | `ui.channel_page` | **أُصلح**: «منشور» و«مشترك/مشتركون» حسب العدد |

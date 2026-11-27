@@ -4,7 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.1] — 2026-11-27
+
+### Fixed
+
+- **Delete (and every form POST) failed behind `tailscale serve`** with
+  `{"error": "cross-site request rejected"}`: the guard compared `Origin` to the `Host`
+  the proxy rewrites. It now accepts the host the browser actually used —
+  `Host`, `X-Forwarded-Host`, `PUBLIC_BASE_URL`, `TRUSTED_ORIGINS` — while a foreign Origin
+  and `Sec-Fetch-Site: cross-site` are still rejected (9 new tests).
+- Drafts can be deleted directly; scheduled/publishing posts still require cancel-then-delete
+  and published posts remain immutable. The old rule forced cancel-first even for drafts,
+  so the delete button appeared to do nothing.
 
 ## [3.0.0] — 2026-11-27
 

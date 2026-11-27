@@ -39,6 +39,23 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(row["status"], "published")
         self.assertEqual(row["message_id"], "MID1")
 
+    def test_delete_rules(self):
+        """Drafts and cancelled items can be deleted; scheduled/published cannot."""
+        draft = self.crm.create_channel_post({
+            "channel_jid": "1203630@newsletter", "title": "d", "body": "x"})
+        self.crm.delete_post(draft["id"])
+        self.assertIsNone(self.crm.get_channel_post(draft["id"]))
+
+        scheduled = self.crm.create_channel_post({
+            "channel_jid": "1203630@newsletter", "title": "s", "body": "x"})
+        self.crm.schedule_post(scheduled["id"], 9999999999, approved=True)
+        with self.assertRaises(PermissionError):
+            self.crm.delete_post(scheduled["id"])
+
+        self.crm.cancel_post(scheduled["id"])
+        self.crm.delete_post(scheduled["id"])  # cancelled -> deletable
+        self.assertIsNone(self.crm.get_channel_post(scheduled["id"]))
+
     def test_content_insights(self):
         now = int(__import__("time").time())
         for kind, views, forwards, reactions, hour in (

@@ -41,6 +41,12 @@ python3 scripts/e2e_local.py                          # 21 checks: draft → app
 Live check on the phone: a scheduled post moved to `published` at its time without
 intervention, and `message_id` was stored.
 
+## Deleting
+
+`crm.delete_post` allows `draft` and `failed` (cancelled). A `scheduled` or `publishing`
+post must be cancelled first — it is in the queue and may be mid-flight. `published` is
+immutable: the channel keeps its own copy, so deleting the row would lie about the record.
+
 ## Limits
 
 - One channel per deployment is the tested path; the schema is per-`channel_jid` but the

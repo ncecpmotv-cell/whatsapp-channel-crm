@@ -41,6 +41,58 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 # Writable cache for generated assets (the code dir is mounted read-only).
 CACHE_DIR = os.environ.get("STATIC_CACHE", "/var/crm/static")
 MEDIA_DIR = os.environ.get("MEDIA_DIR", "/var/crm/media")
+
+
+def _host_key(value: str) -> str:
+    """normalise a host/Origin to host[:port], dropping default ports and schemes"""
+    value = (value or "").strip().lower()
+    if not value:
+        return ""
+    if "://" in value:
+        parsed = urlparse(value)
+        host, port = parsed.hostname or "", parsed.port
+    else:
+        host, _, raw_port = value.partition("/")[0].partition(":")
+        try:
+            port = int(raw_port) if raw_port else None
+        except ValueError:
+            port = None
+    if not host:
+        return ""
+    if port in (None, 80, 443):
+        return host
+    return f"{host}:{port}"
+
+
+def origin_allowed(headers, env=None) -> bool:
+    """Same-origin check that survives reverse proxies (tailscale serve, tunnels).
+
+    The browser sends Origin for POSTs, but the proxy decides which Host the app
+    sees, so the two disagree by design. Accept every host we are reachable on:
+    Host, X-Forwarded-Host, PUBLIC_BASE_URL and TRUSTED_ORIGINS.
+    """
+    env = os.environ if env is None else env
+    site = (headers.get("Sec-Fetch-Site") or "").lower()
+    if site and site not in ("same-origin", "none"):
+        return False
+    origin = (headers.get("Origin") or "").strip()
+    if not origin:
+        return True
+    parsed = urlparse(origin)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    wanted = _host_key(parsed.netloc)
+    candidates = {
+        _host_key(headers.get("Host") or ""),
+        _host_key(headers.get("X-Forwarded-Host") or ""),
+    }
+    for key in ("PUBLIC_BASE_URL", "TRUSTED_ORIGINS"):
+        for item in (env.get(key) or "").split(","):
+            candidates.add(_host_key(item))
+    candidates.discard("")
+    return wanted in candidates
+
+
 def image_dimensions(data: bytes) -> tuple[int, int] | None:
     """Read width/height from PNG/GIF/JPEG headers so the page reserves space (CLS)."""
     if len(data) < 24:
@@ -182,15 +234,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _same_origin(self) -> bool:
         """Blocks cross-site form posts (Basic credentials ride along)."""
-        site = (self.headers.get("Sec-Fetch-Site") or "").lower()
-        if site and site not in ("same-origin", "none"):
-            return False
-        origin = self.headers.get("Origin")
-        if origin:
-            host = (self.headers.get("Host") or "").lower()
-            if urlparse(origin).netloc.lower() != host:
-                return False
-        return True
+        return origin_allowed(self.headers)
 
     def log_message(self, fmt, *args):
         log.info("%s - %s", self.address_string(), fmt % args)
@@ -628,8 +672,11 @@ class Handler(BaseHTTPRequestHandler):
         try:
             crm.delete_post(post_id)
             return self._redirect("/ui/content?ok=deleted")
-        except (ValueError, PermissionError):
-            return self._redirect(f"/ui/post/{post_id}?error=published")
+        except ValueError:
+            return self._redirect("/ui/content?error=not_found")
+        except PermissionError as exc:
+            reason = "published" if "منشور" in str(exc) else "cancel_first"
+            return self._redirect(f"/ui/post/{post_id}?error={reason}")
 
     def _ui_post(self, path: str, raw: bytes):
         crm = self.bridge.crm

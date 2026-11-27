@@ -428,7 +428,10 @@ class CrmClient:
         self._exec(f"UPDATE crm_posts SET {', '.join(sets)} WHERE id = ?", tuple(params))
         return self.get_channel_post(post_id) or {}
 
-    DELETABLE = ("failed",)
+    # Drafts were never sent; cancelled items are already out of the way.
+    # Published posts belong to the channel, and scheduled/publishing ones are
+    # in flight — cancel first, then delete.
+    DELETABLE = ("draft", "failed")
 
     def cancel_post(self, post_id: str) -> dict:
         """Mark as cancelled (ملغى): keeps the record, stops any queued send."""
@@ -457,7 +460,7 @@ class CrmClient:
             raise ValueError("المنشور غير موجود")
         if post["status"] == "published":
             raise PermissionError("لا يمكن حذف منشور منشور على القناة")
-        if post["status"] != "failed":
+        if post["status"] not in self.DELETABLE:
             raise PermissionError("ألغِ العنصر أولًا ثم احذفه نهائيًا")
         self._exec("DELETE FROM outbox WHERE ref = ? AND status IN ('pending','failed')", (post_id,))
         self._exec("DELETE FROM crm_stats WHERE post_id = ?", (post_id,))

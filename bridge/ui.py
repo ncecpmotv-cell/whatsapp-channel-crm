@@ -518,11 +518,12 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
                 f'<form method="post" action="/ui/content/restore">'
                 f'<input type="hidden" name="id" value="{pid}">'
                 f'<button class="ghost">استعادة كمسودة</button></form>')
+        if st in ("draft", "failed"):
             actions.append(
                 f'<form method="post" action="/ui/content/delete" '
                 f'data-confirm="حذف نهائي؟ لا يمكن التراجع.">'
                 f'<input type="hidden" name="id" value="{pid}">'
-                f'<button class="subtle danger">حذف نهائي</button></form>')
+                f'<button class="subtle danger">حذف</button></form>')
         thumb = ""
         if kind == "image" and p.get("media_path"):
             thumb = (f'<img class="thumb" src="/ui/media/{os.path.basename(p["media_path"])}" alt="" '
@@ -755,7 +756,7 @@ def post_page(post: dict, history: list[dict], channel: dict | None, notice: str
                       + "".join(f"<li>{esc(o)}</li>" for o in options) + "</ul>"
                       '<p class="muted">قنوات واتساب لا تدعم الاستبيانات (خطأ 479).</p></div>')
     delete_block = ""
-    if post["status"] == "failed":
+    if post["status"] in ("draft", "failed"):
         delete_block = (
             f'<form method="post" action="/ui/content/delete" '
             f'data-confirm="حذف نهائي؟ لا يمكن التراجع.">'
