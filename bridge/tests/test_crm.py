@@ -2,6 +2,7 @@
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -89,6 +90,45 @@ class CrmTest(unittest.TestCase):
             "channel_jid": "1203630@newsletter", "title": "فشل", "body": "x"})
         self.crm.mark_failed(other["id"], "GOWA 500")
         self.assertTrue(any("فشل النشر" in n["title"] for n in self.crm.notifications()))
+
+    def test_content_gaps_finds_opportunities_and_saturation(self):
+        """A term that appears once with high views is an opportunity, not a trend."""
+        def add(title, body, kind, views, at):
+            post = self.crm.create_channel_post({
+                "channel_jid": "1203630@newsletter", "title": title,
+                "body": body, "content_type": kind})
+            self.crm.mark_published(post["id"], "MID-" + post["id"])
+            self.store.conn.execute(
+                "UPDATE crm_posts SET views=?, published_at=? WHERE id=?",
+                (views, at, post["id"]))
+            self.store.conn.commit()
+
+        now = int(time.time())
+        add("صور المنتجات", "إضاءة طبيعية وخلفية ثابتة", "image", 90, now - 6 * 86400)
+        add("فيديو خلف الكواليس", "كيف نجهز الطلب", "video", 120, now - 5 * 86400)
+        add("نصائح سريعة", "ثلاث نصائح للتصوير بالجوال", "text", 12, now - 4 * 86400)
+        add("نصائح أخرى", "نصائح للكتابة", "text", 10, now - 3 * 86400)
+        add("نصائح ثالثة", "نصائح للنشر", "text", 8, now - 2 * 86400)
+
+        gaps = self.crm.content_gaps(days=30)
+        self.assertEqual(gaps["posts"], 5)
+        # only repeated terms can be called a theme
+        self.assertTrue(all(o["posts"] >= 2 for o in gaps["opportunities"]))
+        self.assertTrue(all(o["avg_views"] > gaps["avg_views"] for o in gaps["opportunities"]))
+        saturated = {s["term"] for s in gaps["saturated"]}
+        self.assertIn("نصائح", saturated)     # three posts, low views
+        self.assertGreaterEqual(gaps["cadence_per_week"], 1)
+
+    def test_semantic_search_ranks_the_right_post_first(self):
+        a = self.crm.create_channel_post({"channel_jid": "1@newsletter", "title": "تصوير المنتجات",
+                                          "body": "الإضاءة الطبيعية تصنع الفرق"})
+        self.crm.create_channel_post({"channel_jid": "1@newsletter", "title": "إدارة الوقت",
+                                      "body": "نظم يومك بمهام صغيرة"})
+        hits = self.crm.semantic_search("اضاءة المنتجات", limit=3)
+        self.assertTrue(hits["results"])
+        self.assertEqual(hits["results"][0]["id"], a["id"])
+        # hamza/taa-marbuta normalisation: "الإضاءة" matches "اضاءه"
+        self.assertEqual(self.crm.semantic_search("الإضاءة")["results"][0]["id"], a["id"])
 
     def test_content_insights(self):
         now = int(__import__("time").time())

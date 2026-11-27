@@ -81,6 +81,7 @@ types and proposed times, all in `draft`.
 | R-18 | Push notifications to the phone | v3.2.0 | [0009](docs/features/0009-push-notifications.md) |
 | R-19 | Installer provisions Tailscale end-to-end | v3.2.0 | [0010](docs/features/0010-installer-tailscale.md) |
 | R-20 | `doctor.sh` health sweep for developers | v3.3.0 | [0011](docs/features/0011-doctor-script.md) |
+| R-21 | Topic intelligence: `content_gaps` + `semantic_search` | v3.4.0 | [0012](docs/features/0012-topic-intelligence.md) |
 
 ---
 

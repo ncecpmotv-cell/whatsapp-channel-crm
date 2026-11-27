@@ -17,6 +17,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0009](0009-push-notifications.md) | Push notifications (Telegram + Termux:API) | shipped | R-18 |
 | [0010](0010-installer-tailscale.md) | The installer owns Tailscale | shipped | R-19 |
 | [0011](0011-doctor-script.md) | `doctor.sh`: one command that tells the truth | shipped | R-20 |
+| [0012](0012-topic-intelligence.md) | Topic gaps + BM25 search over the archive | shipped | R-21 |
 
 ## Adding one
 

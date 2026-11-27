@@ -22,7 +22,8 @@ SERVER_INFO = {"name": "phone-crm-mcp", "version": "2.0.0"}
 INSTRUCTIONS = (
     "CRM قناة واتساب على الجوال: محتوى (draft → معتمد/مجدول → published)، "
     "جهات اتصال وصفقات ومتابعات، وقياسات القناة. "
-    "للتحليل استخدم content_insights وposting_times قبل اقتراح أي خطة. "
+    "للتحليل استخدم content_gaps وcontent_insights وposting_times قبل اقتراح أي خطة. "
+    "قبل اختراع زاوية جديدة، ابحث في الأرشيف بـsemantic_search وأعد استخدام ما نجح. "
     "أنشئ مسودة بـ crm_create_channel_post ثم اقترح وقتًا بـ content_schedule — "
     "النشر النهائي قرار بشري من الواجهة."
 )
@@ -132,6 +133,28 @@ TOOLS = [
                 "tz_offset": {"type": "integer", "minimum": -12, "maximum": 14,
                               "description": "hours from UTC; defaults to TZ_OFFSET"},
             },
+        },
+    },
+    {
+        "name": "content_gaps",
+        "description": "Topic-level diagnosis: terms with high views but few posts (opportunities), "
+                       "terms that are saturated, per-type averages, cadence and gaps in publishing.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 90}},
+        },
+    },
+    {
+        "name": "semantic_search",
+        "description": "Find past posts similar to a phrase (BM25 over titles and bodies). Offline, "
+                       "no embeddings — use it to reuse a winner instead of inventing a new angle.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "two or more meaningful words"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5},
+            },
+            "required": ["query"],
         },
     },
     {
@@ -373,6 +396,15 @@ class McpServer:
 
     def _tool_content_insights(self, args: dict) -> dict:
         return self.crm.content_insights(int(args.get("days") or 30))
+
+    def _tool_content_gaps(self, args: dict) -> dict:
+        return self.crm.content_gaps(int(args.get("days") or 90))
+
+    def _tool_semantic_search(self, args: dict) -> dict:
+        query = (args.get("query") or "").strip()
+        if not query:
+            raise McpError(-32602, "query is required")
+        return self.crm.semantic_search(query, int(args.get("limit") or 5))
 
     def _tool_posting_times(self, args: dict) -> dict:
         offset = args.get("tz_offset")

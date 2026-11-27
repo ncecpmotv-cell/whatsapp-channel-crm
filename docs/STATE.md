@@ -41,7 +41,7 @@ CRM خفيف لقناة واتساب: مسودة → معتمد ومجدول →
 
 - الوحدات: `gowa · crm · picoclaw · sshd · rtunnel · tailscaled · crond` تعمل.
 - `/health`: `{"ok":true,"crm":true,"origin_guard":{"public_url":true,"tailnet":true},"push":{"enabled":true}}`
-- MCP: **16 أداة** · `content_insights` يعيد بيانات حقيقية (فيديو: 16 مشاهدة).
+- MCP: **18 أداة** · `content_gaps` (فجوات الموضوعات) و`semantic_search` (BM25 محلي، ~1ms).
 - PicoClaw: مهارة `content-strategist` مثبّتة، وMCP `crm` مسجّل.
 - الاقتران: `is_logged_in:true` للرقم `966502369637` — بلا QR بعد نقل `storages/`.
 - `doctor.sh`: **22 فحصًا ناجحًا · 0 فشل**.

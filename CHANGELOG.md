@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] — 2026-11-27
+
+### Added
+
+- `content_gaps(days)`: repeated themes (bigrams) ranked against the channel average —
+  under-used opportunities, saturated terms, cadence, longest gap, days since last post and
+  per-type averages. Lexical, local, 1.2 ms on the production archive.
+- `semantic_search(query)`: BM25 over titles and bodies, Arabic-normalised (hamza,
+  taa marbuta, diacritics), ~1 ms, no embeddings and no network.
+- MCP instructions now require `content_gaps` before a plan and a search before a new angle.
+- `scripts/phone-update.sh`: update a phone install from the public repo without git;
+  copies code and skills only, never `var/`, media or env files.
+
+### Notes
+
+- First cut of `content_gaps` ranked single-post terms; the live archive returned stopword
+  noise (`الله،`, `باذن`). Themes now require ≥2 posts — the rule changed, not the wording.
+
 ## [3.3.0] — 2026-11-27
 
 ### Added

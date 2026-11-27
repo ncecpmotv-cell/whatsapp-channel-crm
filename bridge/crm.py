@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 import os
+import re
 import time
 import uuid
 from typing import Any
@@ -155,6 +157,36 @@ def _tz_offset() -> int:
 
 def _row(row) -> dict | None:
     return dict(row) if row is not None else None
+
+
+_AR_STOP = {
+    "في", "من", "على", "الى", "عن", "مع", "هذا", "هذه", "ذلك", "التي", "الذي",
+    "ثم", "قد", "لا", "ما", "ان", "كان", "كانت", "هو", "هي", "هم", "كل", "بعض",
+    "حتى", "بعد", "قبل", "بين", "عند", "لدى", "كما", "لكن", "ولا", "وهو", "وهي",
+    "عبر", "خلال", "حول", "نحو", "دون", "سوى", "الا", "ايضا", "جدا", "كذلك",
+    "حيث", "الان", "اليوم", "الله", "باذن", "انشالله", "سبحانه", "صلى", "عليه",
+    "وسلم", "يارب", "الحمد", "شكرا", "ممكن", "يوجد", "هناك", "اخر", "اول",
+    "the", "and", "for", "with", "that", "this", "from", "your", "you", "are",
+}
+_DIACRITICS = re.compile(r"[\u064B-\u0652\u0670\u0640]")
+
+
+def _norm_ar(text: str) -> str:
+    """Lowercase Arabic normalisation for matching: hamza, alef maqsura, taa marbuta."""
+    text = _DIACRITICS.sub("", text or "")
+    for src, dst in (("أ", "ا"), ("إ", "ا"), ("آ", "ا"), ("ى", "ي"), ("ة", "ه")):
+        text = text.replace(src, dst)
+    return text.lower()
+
+
+def _tokens(text: str) -> list[str]:
+    """Letters only: the Arabic block contains punctuation (، ؟) that \\w would keep."""
+    words = re.findall(r"[^\W\d_]+", _norm_ar(text))
+    return [w for w in words if len(w) >= 3 and w not in _AR_STOP]
+
+
+def _bigrams(tokens: list[str]) -> list[str]:
+    return [f"{a} {b}" for a, b in zip(tokens, tokens[1:])]
 
 
 class CrmClient:
@@ -674,6 +706,124 @@ class CrmClient:
         ranked.sort(key=lambda x: (-x["avg_views"], -x["posts"]))
         return {"days": days, "tz_offset": offset, "buckets": len(ranked),
                 "best": ranked[:8], "worst": ranked[-3:] if len(ranked) > 3 else []}
+
+    # -- topic intelligence (local, no model) -------------------------------
+    def content_gaps(self, days: int = 90) -> dict:
+        """Which topics are under-used (high views, few posts) or saturated.
+
+        Lexical, local and explainable: a term's average views is compared with the
+        channel average, and its post count with the archive size. No model, no cloud.
+        """
+        since = _now() - max(7, days) * 86400
+        rows = self._all(
+            "SELECT id, title, body, media_type AS kind, views, forwards, reactions, "
+            "published_at FROM crm_posts WHERE status='published' AND published_at >= ?",
+            (since,))
+        if not rows:
+            return {"days": days, "posts": 0, "note": "لا منشورات منشورة في هذه المدة"}
+        views = [r["views"] or 0 for r in rows]
+        avg_all = sum(views) / len(rows)
+        terms: dict[str, list[dict]] = {}
+        topics: dict[str, list[dict]] = {}
+        for row in rows:
+            tokens = _tokens(f"{row['title'] or ''} {row['title'] or ''} {row['body'] or ''}")
+            for term in set(tokens):
+                terms.setdefault(term, []).append(row)
+            for phrase in set(_bigrams(tokens)):
+                topics.setdefault(phrase, []).append(row)
+        total = len(rows)
+
+        def stats_of(bucket: dict[str, list[dict]]) -> list[dict]:
+            out = []
+            for term, rs in bucket.items():
+                term_views = [r["views"] or 0 for r in rs]
+                out.append({"term": term, "posts": len(rs),
+                            "avg_views": round(sum(term_views) / len(rs), 1)})
+            return out
+
+        stats = stats_of(topics) or stats_of(terms)
+        # A term seen in a single post is that post's vocabulary, not a theme:
+        # requiring two posts stops one lucky post from filling the list.
+        max_opportunity_posts = max(2, round(total * 0.25))
+        opportunities = [s for s in stats
+                         if 2 <= s["posts"] <= max_opportunity_posts
+                         and s["avg_views"] >= avg_all * 1.25]
+        opportunities.sort(key=lambda s: (-s["avg_views"], s["term"]))
+        saturated = [s for s in stats_of(terms)
+                     if s["posts"] >= max(3, round(total * 0.25))
+                     and s["avg_views"] <= avg_all]
+        saturated.sort(key=lambda s: (-s["posts"], s["term"]))
+        kinds: dict[str, dict] = {}
+        for row in rows:
+            kind = row["kind"] or "text"
+            if kind in ("none", ""):
+                kind = "text"
+            k = kinds.setdefault(kind, {"posts": 0, "views": 0})
+            k["posts"] += 1
+            k["views"] += row["views"] or 0
+        per_type = [
+            {"type": k, "posts": v["posts"], "avg_views": round(v["views"] / v["posts"], 1)}
+            for k, v in kinds.items()
+        ]
+        per_type.sort(key=lambda x: -x["avg_views"])
+        stamps = sorted(int(r["published_at"]) for r in rows if r["published_at"])
+        gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+        return {
+            "days": days,
+            "posts": total,
+            "avg_views": round(avg_all, 1),
+            "cadence_per_week": round(total / max(1, days / 7), 1),
+            "longest_gap_days": round(max(gaps) / 86400, 1) if gaps else None,
+            "days_since_last": round((_now() - stamps[-1]) / 86400, 1) if stamps else None,
+            "per_type": per_type,
+            "opportunities": opportunities[:6],
+            "saturated": saturated[:6],
+            "note": ("عينة صغيرة: اقرأ الفرص كمؤشر لا حكم" if total < 20 else
+                     "الفرص مصطلحات تكررت في منشورين على الأقل بمشاهدات أعلى من المتوسط"),
+        }
+
+    def semantic_search(self, query: str, limit: int = 5) -> dict:
+        """BM25 over titles (weighted twice) and bodies — works offline, no embeddings."""
+        words = _tokens(query or "")
+        if not words:
+            return {"query": query, "results": [], "note": "اكتب كلمتين على الأقل"}
+        rows = self._all(
+            "SELECT id, title, body, media_type AS kind, status, views, published_at "
+            "FROM crm_posts")
+        if not rows:
+            return {"query": query, "results": []}
+        docs = []
+        for row in rows:
+            title_tokens = _tokens(row["title"] or "")
+            body_tokens = _tokens(row["body"] or "")
+            docs.append((row, title_tokens * 2 + body_tokens))
+        avg_len = sum(len(t) for _, t in docs) / max(1, len(docs)) or 1.0
+        df: dict[str, int] = {}
+        for _, tokens in docs:
+            for term in set(tokens):
+                df[term] = df.get(term, 0) + 1
+        k1, b = 1.5, 0.75
+        scored = []
+        for row, tokens in docs:
+            if not tokens:
+                continue
+            score = 0.0
+            for term in words:
+                tf = tokens.count(term)
+                if not tf:
+                    continue
+                idf = math.log(1 + (len(docs) - df.get(term, 0) + 0.5) / (df.get(term, 0) + 0.5))
+                score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * len(tokens) / avg_len))
+            if score > 0:
+                scored.append((score, row))
+        scored.sort(key=lambda pair: -pair[0])
+        results = []
+        for score, row in scored[:max(1, min(limit, 20))]:
+            snippet = " ".join((row["body"] or "").split())[:140]
+            results.append({"id": row["id"], "title": row["title"], "status": row["status"],
+                            "type": row["kind"], "views": row["views"] or 0,
+                            "score": round(score, 2), "snippet": snippet})
+        return {"query": query, "results": results, "searched": len(docs)}
 
     # -- history / channel profile -----------------------------------------
     def record_stats(self, post_id: str) -> None:
