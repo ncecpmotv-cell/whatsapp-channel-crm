@@ -8,9 +8,10 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import html
-import os
-import threading
 import json
+import os
+import re
+import threading
 from urllib.parse import parse_qs
 
 STAGES_AR = {
@@ -196,6 +197,8 @@ details.panel[open]>summary{border-bottom:1px solid var(--line)}
 .post{display:flex;flex-direction:column;gap:0}
 .post-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px}
 .post-head .badge{flex:0 0 auto;margin-top:2px;order:2}
+.thumb{width:56px;height:56px;flex:0 0 56px;object-fit:cover;border-radius:10px;
+  border:1px solid var(--line);background:#0b110e}
 .post-title{flex:1;min-width:0;font-size:var(--fs-2);font-weight:700;color:var(--ink);
   text-decoration:none;line-height:1.5}
 .post-title:hover{color:var(--accent)}
@@ -287,7 +290,17 @@ def write_stylesheet(directory: str) -> str:
 
 
 _UNREAD = 0
+_CSRF = ""
 _FLASH = threading.local()
+
+
+def set_csrf(token: str) -> None:
+    global _CSRF
+    _CSRF = token
+
+
+def csrf_field() -> str:
+    return f'<input type="hidden" name="csrf" value="{esc(_CSRF)}">' if _CSRF else ""
 _JS_VERSION: str | None = None
 
 
@@ -377,6 +390,9 @@ def page(title: str, body: str, active: str = "") -> bytes:
 <header class="top"><span class="brand">CRM · قناة واتساب</span>{head_act}{bell}<nav>{links}</nav></header>
 <main class="container">{body}</main>
 <script src="/static/app.js?v={js_version()}" defer></script></body></html>"""
+    if _CSRF:
+        doc = re.sub(r'<form method="post"([^>]*)>',
+                     lambda m: f'<form method="post"{m.group(1)}>{csrf_field()}', doc)
     return doc.encode("utf-8")
 
 
@@ -507,11 +523,16 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
                 f'data-confirm="حذف نهائي؟ لا يمكن التراجع.">'
                 f'<input type="hidden" name="id" value="{pid}">'
                 f'<button class="subtle danger">حذف نهائي</button></form>')
+        thumb = ""
+        if kind == "image" and p.get("media_path"):
+            thumb = (f'<img class="thumb" src="/ui/media/{os.path.basename(p["media_path"])}" alt="" '
+                     f'width="56" height="56" loading="lazy" decoding="async">')
         actions_html = ("" if not actions
                         else '<div class="post-actions">' + "".join(actions) + "</div>")
         rows.append(f"""
 <article class="card post">
   <div class="post-head">
+    {thumb}
     <a class="post-title" href="/ui/post/{pid}">{esc(p["title"] or text[:70] or "بدون عنوان")}</a>
     {badge(st)}
   </div>
@@ -673,7 +694,7 @@ def parse_local_datetime(value: str) -> int | None:
     if parsed.tzinfo is not None:
         return int(parsed.timestamp())
     utc_naive = parsed - dt.timedelta(hours=TZ_OFFSET)
-    return int(utc_naive.replace(tzinfo=dt.timezone.utc).timestamp())
+    return int(utc_naive.replace(tzinfo=dt.UTC).timestamp())
 
 
 # ---------------------------------------------------------------- post detail
@@ -734,7 +755,6 @@ def post_page(post: dict, history: list[dict], channel: dict | None, notice: str
                       + "".join(f"<li>{esc(o)}</li>" for o in options) + "</ul>"
                       '<p class="muted">قنوات واتساب لا تدعم الاستبيانات (خطأ 479).</p></div>')
     delete_block = ""
-    edit_block = ""
     if post["status"] == "failed":
         delete_block = (
             f'<form method="post" action="/ui/content/delete" '
@@ -742,17 +762,6 @@ def post_page(post: dict, history: list[dict], channel: dict | None, notice: str
             f'<input type="hidden" name="id" value="{pid}">'
             f'<button class="subtle danger">حذف نهائي</button></form>'
         )
-    if post["status"] in ("draft", "scheduled"):
-        edit_block = f"""
-<h2>تعديل</h2>
-<form method="post" action="/ui/content/edit">
-  <input type="hidden" name="id" value="{esc(post["id"])}">
-  <label>العنوان <input name="title" value="{esc(post.get("title") or "")}"></label>
-  <label>النص <textarea name="body">{esc(post.get("body") or "")}</textarea></label>
-  <label>إعادة جدولة إلى <input type="datetime-local" name="at"></label>
-  <button>حفظ التعديل</button>
-</form>
-"""
     editable = post["status"] in ("draft", "scheduled")
     when = post.get("scheduled_at")
     when_value = ""

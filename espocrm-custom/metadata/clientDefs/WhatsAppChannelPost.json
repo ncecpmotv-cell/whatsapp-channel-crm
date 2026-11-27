@@ -1,7 +1,0 @@
-{
-  "icon": "fas fa-bullhorn",
-  "color": "#25D366",
-  "statusField": "status",
-  "defaultFilter": "all",
-  "views": {}
-}

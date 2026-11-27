@@ -48,7 +48,7 @@ class Config:
     tz_offset: int = 3  # Asia/Riyadh; container clocks are UTC
 
     @classmethod
-    def load(cls, path: str | None = None) -> "Config":
+    def load(cls, path: str | None = None) -> Config:
         path = path or os.environ.get("BRIDGE_ENV_FILE", ENV_PATH)
         values = parse_env_file(path)
         values.update({k: v for k, v in os.environ.items() if k in _KNOWN_KEYS})

@@ -1,12 +1,17 @@
 
-import json, os, sys, tempfile, unittest
+import json
+import os
+import sys
+import tempfile
+import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from test_bridge import FakeGowa
 
 from crm import CrmClient
 from mcp import McpServer
 from store import Store
-from test_bridge import FakeGowa
 
 
 class McpTest(unittest.TestCase):

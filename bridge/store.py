@@ -2,7 +2,7 @@
 
 The outbox exists so a WhatsApp/GOWA outage never loses a scheduled post:
 each publish attempt is stored, retried with backoff, and only marked done
-after GOWA accepts it and EspoCRM records Published.
+after GOWA accepts it and the CRM records Published.
 """
 from __future__ import annotations
 

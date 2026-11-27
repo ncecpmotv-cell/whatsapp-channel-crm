@@ -1,4 +1,4 @@
-"""Business logic: GOWA <-> local CRM (SQLite). No EspoCRM, no MariaDB.
+"""Business logic: GOWA <-> local CRM (SQLite).
 
 Inbound:  WhatsApp DM / channel post  -> CRM contact, timeline, content archive
 Outbound: approved content            -> outbox -> GOWA -> published + counters
@@ -58,7 +58,7 @@ def to_epoch(value) -> int | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=dt.timezone.utc)
+        parsed = parsed.replace(tzinfo=dt.UTC)
     return int(parsed.timestamp())
 
 

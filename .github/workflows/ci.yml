@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: lint + unit + e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        run: ruff check bridge scripts
+      - name: Compile
+        run: python -m compileall -q bridge scripts
+      - name: Unit tests
+        run: python -m unittest discover -s bridge/tests -v
+      - name: End-to-end (fake GOWA, no network)
+        run: python scripts/e2e_local.py
+
+  shell:
+    name: shell syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: bash -n
+        run: for f in scripts/*.sh; do bash -n "$f" && echo "ok $f"; done
+
+  no-secrets:
+    name: no committed secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked files
+        run: |
+          if grep -rInE '(BRIDGE_TOKEN|PICO_TOKEN|GOWA_PASSWORD|WHATSAPP_WEBHOOK_SECRET)=[A-Za-z0-9_\-]{12,}' \
+               --include='*.py' --include='*.sh' --include='*.env*' .; then
+            echo "::error::possible hardcoded secret"; exit 1
+          fi
+          echo "no hardcoded secrets found"

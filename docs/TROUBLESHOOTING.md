@@ -1,193 +1,64 @@
-# Troubleshooting — every failure actually hit during the build
+# Troubleshooting
 
-Each entry is a real error string from the reference device (Huawei P Smart
-2019, Android 9 / EMUI 9.1, Termux, no root).
+Every entry below is a failure that actually happened while building this, with the fix that worked.
 
-## GOWA
+## Install
 
-### `bash: ./whatsapp: cannot execute: required file not found`
+**`missing 'unzip'` / `missing 'curl'`** — on Debian: `sudo apt install -y unzip curl python3`. On Termux the installer runs `pkg install` itself.
 
-The binary is glibc-linked. Check with:
+**`unsupported architecture`** — only arm64, armv7, armv6 and amd64 have prebuilt GOWA/PicoClaw releases. On anything else, build GOWA from source and pass `--skip-gowa`.
 
-```bash
-readelf -l whatsapp | grep INTERP      # shows /lib/ld-linux-aarch64.so.1
-readelf -d whatsapp | grep NEEDED      # shows libc.so.6
-```
+**`no binary inside whatsapp_...zip`** — release zips name the payload after the platform (`linux-arm64`), not `whatsapp`. The installer already searches by size; if you edited it, restore that `find … -size +1M` step.
 
-Termux has no glibc loader. Build the static musl binary instead:
-`scripts/build-gowa-arm64.sh`.
+**Everything is "down" right after install** — the first start downloads assets and initialises WAL. Check `~/.whatsapp-crm/var/log/*.log`, then `crmctl start` again.
 
-### `failed to initialize chat storage: ... go-sqlite3 requires cgo to work`
+## WhatsApp pairing
 
-You built with `CGO_ENABLED=0`. GOWA's SQLite driver requires cgo. Build with
-`CGO_ENABLED=1` and a musl/static toolchain (the script does this).
+**QR never appears** — GOWA answers `401` until you authenticate: `curl -u crm:$GOWA_PASSWORD http://127.0.0.1:3000/app/login -o qr.png`. Credentials are in `etc/gowa.env`.
 
-### `lookup web.whatsapp.com on [::1]:53: read udp ... connection refused`
+**`Logged out` / sends fail with 401** — the WhatsApp session expired (new phone, WhatsApp Web logout, or a restore from backup). Re-pair with `install.sh --qr`; the CRM data is unaffected.
 
-Go's resolver reads `/etc/resolv.conf`, which does not exist on Android. Run
-GOWA under proot with a bind-mounted file:
+**Publishing fails with `479`** — the content type is a poll. WhatsApp Channels do not support polls; the UI blocks them and the API returns a permanent error instead of retrying forever.
 
-```bash
-proot -b ~/gowa-espo/etc/resolv.conf:/etc/resolv.conf ./whatsapp rest …
-```
+## The UI
 
-### `tls: failed to verify certificate: x509: certificate signed by unknown authority`
+**Page looks unstyled** — `app.css` is missing. It is generated: run `python3 scripts/build_static.py`, or just restart the bridge (it writes the stylesheet at boot). `GET /static/app.css` must return 200.
 
-`/etc/ssl/certs` does not exist on Android. Either export
-`SSL_CERT_FILE=$PREFIX/etc/tls/cert.pem` or bind-mount it (the runit service
-does both).
+**CSS/JS changes do not reach the phone** — asset URLs carry `?v=<hash>`; if you serve a stale copy, the HTML itself is cached. Hard-refresh once. Never remove the version query: a bare filename plus `immutable` locks a browser to the old file for a week.
 
-### `{"code":"DEVICE_ID_REQUIRED"}`
+**A control is squeezed to a sliver** — a flex child is winning the width fight (usually a `button { width: 100% }` rule from the mobile block). Give the button `width: auto; flex: 0 0 auto` and the input `flex: 1; min-width: 0`.
 
-GOWA runs in multi-device mode; every call needs `X-Device-Id`. Create a slot
-first:
+**Arabic digits or dates look mixed** — format timestamps through `fmt_ts()` only; it applies the `TZ_OFFSET` from the config and one consistent pattern.
 
-```bash
-curl -X POST localhost:3000/devices -H 'Content-Type: application/json' \
-  -d '{"device_id":"primary","webhook_url":"http://127.0.0.1:8085/webhook/gowa"}'
-```
+## Data
 
-### QR expires before it can be scanned
+**A post is stuck in `publishing`** — the worker died mid-send. It is recovered on the next tick (claim is idempotent); if it stays, `UPDATE crm_posts SET status='scheduled' WHERE id='…'` and let the worker retry.
 
-`/devices/primary/login` returns `qr_duration: 30`. Fetch the link, download the
-PNG immediately, and re-request if it lapsed.
+**Counters are zero** — either the channel archive was never imported (`/ui/channel` → **مزامنة أرشيف القناة**) or GOWA is not authenticated for that channel.
 
-### `AUTHENTICATION_ERROR ... not connect to services server`
+**`database is locked`** — two writers. Only one bridge process may own `crm.db`; check `pgrep -af bridge/app.py` and kill the stray one.
 
-The device slot exists but no WhatsApp session is linked (or it was logged out
-from the phone). Re-scan the QR.
+**Media 404** — the file was removed or never written. `GET /ui/media/<name>` only serves `MEDIA_NAME_RE` names from `MEDIA_DIR`; check `var/media` and `MEDIA_DIR` in `etc/crm.env`.
 
-## EspoCRM
+## Access
 
-### The page says "You need to configure your webserver"
+**401 in the browser but curl works** — the browser is still sending an old password. Close the tab, or use a private window; Basic credentials are cached per origin.
 
-EspoCRM 10 moved the front controller to `public/`. A vhost whose `root` is the
-project root serves the placeholder `index.php`. Use
-`espocrm-custom/nginx-espocrm.conf` (root = project, `index public/index.php`,
-`try_files … /public/index.php`, plus a `/api/` rewrite to
-`public/api/v1/index.php`).
+**429 Too Many Requests** — 10 failed logins from the same IP within 5 minutes. Wait 5 minutes, or restart the bridge to clear the in-memory counter.
 
-### `X-Status-Reason: Controller 'X' does not exist`
+**Tailscale URL returns 502** — `tailscale serve` is pointing at the wrong port. `tailscale serve status`, then re-run `tailscale serve --bg --https=443 http://127.0.0.1:8085`.
 
-Custom entities need a controller class, not just metadata:
+**Android kills the stack overnight** — battery optimisation, not the app. See [`ANDROID-BACKGROUND.md`](ANDROID-BACKGROUND.md).
 
-```
-custom/Espo/Custom/Controllers/WhatsAppChannelPost.php
-namespace Espo\Custom\Controllers;
-class WhatsAppChannelPost extends \Espo\Core\Controllers\Record {}
-```
+## Agent (PicoClaw)
 
-### Entity is 404 even though metadata files exist
-
-- The scope key in Espo 10 is `isCustom`, not `custom`.
-- Entity class goes in `custom/Espo/Custom/Entities/<Name>.php`.
-- Run `php bin/command clear-cache && php bin/command rebuild`.
-
-### Role update returns `400` with an empty body
-
-`role.data` rejects booleans. Use strings:
-
-```json
-{"Contact":{"create":"yes","read":"all","edit":"all","delete":"yes","stream":"yes"}}
-```
-
-### `POST /Contact/{id}/stream` returns `200 false` and writes nothing
-
-In Espo 10 that endpoint is a silent no-op. Post notes through the entity:
-
-```json
-POST /api/v1/Note
-{"type":"Post","parentType":"Contact","parentId":"<id>","post":"..."}
-```
-
-### Note creation returns `403 No create access`
-
-Note permission is derived from the **parent** scope's stream permission. The
-role needs `"stream":"yes"` on `Contact` / `Lead` / `Case`, not just on `Note`.
-
-### `X-Api-Key` returns `401`
-
-The API user must have `authMethod = "ApiKey"` and `type = "api"`. A key
-generated for a regular user authenticates but 403s elsewhere.
-
-### Generating an API key returns `false`
-
-Use the dedicated endpoint:
+**The agent has no CRM tools** — the MCP server is not registered:
 
 ```bash
-curl -u admin:pass -X POST http://127.0.0.1:8081/api/v1/UserSecurity/apiKey/generate \
-  -H 'Content-Type: application/json' -d '{"id":"<userId>"}'
+PICOCLAW_HOME=~/.whatsapp-crm/picoclaw ~/.whatsapp-crm/bin/picoclaw mcp list
+PICOCLAW_HOME=~/.whatsapp-crm/picoclaw ~/.whatsapp-crm/bin/picoclaw mcp test crm
 ```
 
-### Contact creation fails with `field: lastName, type: required`
+`mcp add` writes to `tools.mcp.servers.<name>`; a hand-written top-level `mcp` key is ignored.
 
-EspoCRM requires a non-empty `lastName`. Single-word display names must be sent
-as `lastName` with an empty `firstName` (the bridge does this).
-
-## Access / tunnel
-
-### `Connection timed out during banner exchange` on the reverse-tunnel port
-
-A stale `sshd` child on the *server* still owns the forwarded port: it accepts
-TCP but the far end is gone. Free it (`ss -ltnp | grep 2225`, kill that pid) or
-move the tunnel to a new port — which also needs a matching
-`permitlisten="127.0.0.1:2225"` entry in the server's `authorized_keys`.
-
-### `nohup ssh -N -R … &` shows `Stopped` and an empty log
-
-ssh asked for the host key on the tty and job control suspended it. Use
-`-f -N -T` with `-o BatchMode=yes -o StrictHostKeyChecking=accept-new`.
-
-### Tunnel must not depend on Tailscale
-
-A shared tailnet node can disappear from `tailscale status` and lock you out.
-Point the tunnel at the server's public IP (see `scripts/runit/rtunnel/run`).
-
-## Termux / runit
-
-### `sv down gowa` leaves the process running
-
-`proot` ignores `SIGTERM`. Kill by PID, then `sv up`:
-
-```bash
-for p in $(ps -eo pid,args | grep 'gowa-espo/bin/whatsapp' | grep -v grep | awk '{print $1}'); do kill -9 "$p"; done
-```
-
-### `curl: (23) Failed writing body` / empty files under `/tmp`
-
-`/tmp` is not reliable in Termux. Write to `$HOME` instead.
-
-### php-fpm cannot write `data/` or `custom/`
-
-Set the pool user to the Termux uid (`u0_aNNN`), not `www-data`/`nobody`:
-
-```bash
-php bin/command config:set defaultPermissions.user "$(id -un)"
-php bin/command config:set defaultPermissions.group "$(id -gn)"
-```
-
-### MariaDB crash-loops with `Unable to lock ./ibdata1 error: 11`
-
-Two service units own the same datadir. Termux snapshots often leave both a
-legacy `mysqld` unit and a `mariadb` unit; the older process holds the InnoDB
-lock and the newer one restarts every second. Keep exactly one:
-
-```bash
-touch $PREFIX/var/service/mysqld/down     # never autostart it again
-sv down mysqld
-kill -9 <legacy mysqld pid>
-sv up mariadb
-mariadb -u root -e "show global status like 'Uptime';"   # must be small
-```
-
-### Port 8080 already answers
-
-That is nginx's stock default vhost (`listen 8080` in `nginx.conf`). EspoCRM is
-served on 8081 by this project.
-
-## WhatsApp channels
-
-### Publishing fails with `not-authorized` / no permission
-
-WhatsApp only allows posting to a channel where the linked account is an
-**admin/owner**. A follower account can read and monitor, never post.
+**Agent answers "unauthorized"** — the bearer token in `config.json` no longer matches `BRIDGE_TOKEN`. Re-run the `mcp add` command from the installer.

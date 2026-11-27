@@ -13,10 +13,6 @@ whatsapp.db*
 qr*.png
 *.qr
 
-# EspoCRM runtime
-espocrm/data/
-espocrm/custom/Espo/Custom/Resources/metadata/app/
-espocrm/*.log
 logs/
 *.log
 

@@ -161,6 +161,8 @@ details.panel[open]>summary{border-bottom:1px solid var(--line)}
 .post{display:flex;flex-direction:column;gap:0}
 .post-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px}
 .post-head .badge{flex:0 0 auto;margin-top:2px;order:2}
+.thumb{width:56px;height:56px;flex:0 0 56px;object-fit:cover;border-radius:10px;
+  border:1px solid var(--line);background:#0b110e}
 .post-title{flex:1;min-width:0;font-size:var(--fs-2);font-weight:700;color:var(--ink);
   text-decoration:none;line-height:1.5}
 .post-title:hover{color:var(--accent)}

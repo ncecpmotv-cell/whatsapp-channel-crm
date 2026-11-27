@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -118,7 +119,7 @@ def main() -> int:
 
         # --- inbound DM through the HMAC webhook
         event = {"event": "message", "payload": {
-            "id": "IN1", "chat_id": f"966500000001@s.whatsapp.net",
+            "id": "IN1", "chat_id": "966500000001@s.whatsapp.net",
             "from": "966500000001@s.whatsapp.net", "body": "أبغى عرض سعر",
             "timestamp": "2026-11-26T12:00:00Z", "is_from_me": False}}
         raw = json.dumps(event).encode()
@@ -134,6 +135,10 @@ def main() -> int:
         # --- UI
         import base64
         auth = "Basic " + base64.b64encode(f"crm:{TOKEN}".encode()).decode()
+        status, page_body, _ = http("GET", "/ui/content", headers={"Authorization": auth})
+        match = re.search(rb'name="csrf" value="([a-f0-9]{32})"', page_body)
+        csrf = match.group(1).decode() if match else ""
+        check("UI forms carry a csrf token", bool(csrf), str(status))
         for path, needle in (("/ui", "لوحة اليوم"), ("/ui/content", "المحتوى"),
                              ("/ui/contacts", "العملاء"), ("/ui/metrics", "القياسات")):
             status, body, _ = http("GET", path, headers={"Authorization": auth})
@@ -143,12 +148,13 @@ def main() -> int:
         check("UI requires auth", status == 401)
 
         # --- create a draft from the UI form
-        form = urllib.parse.urlencode({"title": "منشور اختبار", "body": "نص المنشور"}).encode()
+        form = urllib.parse.urlencode({"title": "منشور اختبار", "body": "نص المنشور", "csrf": csrf}).encode()
         status, _, headers = http("POST", "/ui/content/new", form,
                                   {"Authorization": auth, "Content-Type": "application/x-www-form-urlencoded"})
         check("UI creates draft", status in (200, 303), str(status))
 
-        import crm as crm_mod, store as store_mod
+        import crm as crm_mod
+        import store as store_mod
         store = store_mod.Store(os.path.join(tmp, "crm.db"))
         client = crm_mod.CrmClient(store)
         drafts = client.list_posts("draft")
@@ -176,7 +182,12 @@ def main() -> int:
         check("agent proposal stays draft", row["status"] == "draft", row["status"])
 
         # --- human approval + publish through the outbox
-        form = urllib.parse.urlencode({"id": post_id}).encode()
+        no_csrf = urllib.parse.urlencode({"id": post_id}).encode()
+        status, _, _ = http("POST", "/ui/content/publish", no_csrf,
+                            {"Authorization": auth, "Content-Type": "application/x-www-form-urlencoded"})
+        check("POST without csrf rejected", status == 403, str(status))
+
+        form = urllib.parse.urlencode({"id": post_id, "csrf": csrf}).encode()
         status, _, _ = http("POST", "/ui/content/publish", form,
                             {"Authorization": auth, "Content-Type": "application/x-www-form-urlencoded"})
         for _ in range(20):

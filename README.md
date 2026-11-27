@@ -1,111 +1,128 @@
-# CRM الجوال — PicoClaw + CRM + GOWA في منظومة واحدة
+# WhatsApp Channel CRM
 
-نظام واحد خفيف يعمل داخل Termux على الجوال: يقرأ واتساب (GOWA)، ينظّم محتوى
-القناة، يدير العملاء والصفقات، ويُعرّض كل ذلك لوكيل الذكاء **PicoClaw** عبر MCP —
-بلا EspoCRM، بلا MariaDB، بلا PHP، بلا Node.
+**A single-process CRM for a WhatsApp Channel — content pipeline, contacts, deals and channel metrics — running on one phone, one SQLite file, one port.**
+
+Built for people who publish from a phone: it turns a WhatsApp Channel into a small editorial desk with an approval workflow, and exposes the whole thing to an AI agent over MCP.
+
+[![CI](https://github.com/ncecpmotv-cell/whatsapp-channel-crm/actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-brightgreen.svg)](https://www.python.org/)
+
+---
+
+## Why
+
+Most CRMs assume a server, a database and a team. A channel owner needs four things:
+
+1. **Write and approve posts** without CMS sprawl: `draft → approved/scheduled → published | cancelled`.
+2. **See what the channel did**: views, forwards, reactions per post, daily series.
+3. **Keep the leads** that arrive in DMs as contacts and deals.
+4. **Let an agent help** — but never publish on its own.
+
+This project does exactly that, and nothing else. No PHP, no MariaDB, no Node runtime, no container on the device. Roughly **30 MB of RAM** for the CRM process; the UI is server-rendered Arabic RTL HTML with a 3.5 KB progressive-enhancement script.
+
+## What you get
+
+| Piece | Role |
+|---|---|
+| **CRM bridge** (Python stdlib + SQLite) | Content pipeline, contacts, deals, metrics, Arabic web UI, MCP server |
+| **[GOWA](https://github.com/aldinokemal/go-whatsapp-web-multidevice)** | Pairs with WhatsApp, sends channel posts, delivers inbound DMs |
+| **[PicoClaw](https://github.com/sipeed/picoclaw)** | Personal agent runtime; talks to the CRM through MCP tools |
+| **Tailscale** (optional) | Private HTTPS access to the UI from your phone or laptop |
 
 ```
 PicoClaw ──MCP :8085/mcp──┐
-                          ├── CRM (Python stdlib + SQLite) ── crm.db
-GOWA :3000 ──webhook──────┘        └── واجهة ويب عربية :8085/ui
+                          ├── CRM bridge (Python + SQLite) ── crm.db + media/
+GOWA :3000 ──webhook──────┘        └── Arabic UI :8085/ui
 ```
 
-- **عملية واحدة، منفذ واحد (8085)، ملف SQLite واحد** (`~/gowa-espo/var/crm.db`).
-- إعداد PicoClaw **لا يتغير**: نفس العنوان `http://127.0.0.1:8085/mcp` ونفس أسماء الأدوات `mcp_crm_*`.
-
-## المحتوى
-
-الحالات: **مسودة** (`draft`) → **معتمد ومجدول** (`scheduled`) → **جارٍ النشر** (`publishing`) →
-**منشور** (`published`) · **ملغى** (`failed`، ويشمل الملغى يدويًا والفشل الدائم).
-«إلغاء» يُبقي السجل في الأرشيف، و«حذف نهائي» متاح للملغى فقط.
-
-- الوكيل ينشئ مسودات ويقترح وقتًا (`content_schedule`) → تصبح `review`.
-- **النشر قرار بشري** من الواجهة (زر «جدولة» أو «نشر الآن») — إلا إذا فعّلت
-  `AGENT_CAN_PUBLISH=1` صراحةً.
-- كل نشر يمر عبر outbox مع إعادة محاولة 30/60/90… ثانية (حتى 5 محاولات)،
-  وفشل دائم يظهر في الواجهة (`last_error`).
-- أرشيف القناة يُسحب تلقائيًا عند الإقلاع وكل `BRIDGE_CHANNEL_SYNC_INTERVAL`،
-  والقياسات (مشاهدات/تمرير/تفاعل) تُحدَّث من `message-updates`.
-
-## الواجهة
-
-`http://127.0.0.1:8085/ui` — مصادقة Basic: اسم أي شيء، كلمة المرور = `BRIDGE_TOKEN`.
-
-شاشات: اليوم · المحتوى · العملاء · الفرص · القياسات. PWA عبر `/ui/manifest.webmanifest`.
-
-### أنماط الواجهة (بدون أطر عمل)
-
-- **كشف تدريجي:** الأقسام الثانوية داخل `<details>` (مجدول/متابعات/محتوى جديد)،
-  والتصفية شرائح أفقية (chips) بدل قوائم طويلة.
-- **محتوى جديد:** زر عائم واحد (FAB) يفتح اللوحة القابلة للطي؛ النموذج يعمل حتى بدون JS.
-- **تحميل ذكي:** ترقيم 15 عنصرًا (`?page=`)، هيكل تحميل (skeleton) عند التنقل والإرسال،
-  و`loading="lazy"` لأي وسائط تُعرض لاحقًا.
-- **تغذية راجعة:** Toast من `?ok=` بعد كل عملية، سحب للتحديث (pull-to-refresh)،
-  وحالات فراغ بزر إجراء واضح.
-- **بلا تبعيات:** `bridge/static/app.js` ≈3.5KB (1.3KB gzip) وCSS مُولَّد
-  (`scripts/build_static.py` يكتب `.css` + `.gz` للأصول المحلية).
-
-### الأداء (مقيس)
-
-Lighthouse mobile · 360×640@3x · CPU ×4 · Slow 4G:
-
-- أداء 100 · إتاحة 100 · أفضل الممارسات 100 · LCP 0.9s · TBT 0ms · CLS 0.
-- HTML مضغوط (gzip) مع `ETag` → الزيارة المتكررة **304 · 0 بايت**.
-- انتقال صفحة المحتوى: 24,948B → ~17,600B (`−29.5%`).
-
-
-## الوصول عبر Tailscale
-
-النظام عقدة داخل الـtailnet (TLS من Let's Encrypt)، لا منفذ مكشوف للإنترنت:
+## Install (one script)
 
 ```bash
-tailscale serve --bg --https=8444 http://127.0.0.1:8085
-# https://<hostname>.<tailnet>.ts.net:8444/
+git clone https://github.com/ncecpmotv-cell/whatsapp-channel-crm
+cd whatsapp-channel-crm
+bash scripts/install.sh
 ```
 
-على السيرفر (معاينة): `https://almahdiya-platform.tail89e761.ts.net:8444/`.
-
-## التركيب على الجوال
+The installer detects Termux or Linux, downloads the **latest** GOWA and PicoClaw releases for your architecture, generates secrets, registers the CRM as an MCP server inside PicoClaw, writes a launcher, and starts everything.
 
 ```bash
-# في Termux، داخل نسخة المستودع
-bash scripts/upgrade-to-crm.sh                 # يحوّل الجسر إلى CRM محلي
-bash scripts/upgrade-to-crm.sh --retire-espocrm # ويوقف EspoCRM/MariaDB/nginx
+~/.whatsapp-crm/bin/crmctl status     # crm / gowa / pico
+bash scripts/install.sh --qr          # print the WhatsApp pairing QR
+bash scripts/install.sh --upgrade     # pull the latest GOWA, PicoClaw and CRM
 ```
 
-السكربت: نسخة احتياطية → نسخ `bridge/*.py` → ترحيل `.env` → إعادة تشغيل → فحص صحة.
-للتجربة بدون تشغيل: `--no-start`.
+Open `http://127.0.0.1:8085/ui` — any username, password = `BRIDGE_TOKEN` from `~/.whatsapp-crm/etc/crm.env`.
 
-## التدقيق
+Options, Tailscale, systemd/runit and uninstall: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+
+## The content workflow
+
+```
+draft ──► approved & scheduled ──► publishing ──► published
+  │                 │
+  └──── cancelled ◄─┘   (kept in the archive; purge only from cancelled)
+```
+
+- The **agent can write and propose times**, but publishing stays a human decision (`AGENT_CAN_PUBLISH=0` by default).
+- Publishing is queued in an outbox with retries and permanent-failure reporting, so a network blip does not lose a post.
+- Published posts are immutable in the UI; scheduled posts can be cancelled or rescheduled before they go out.
+- Types: text, image, video, audio, file, link. Polls are rejected with a clear message (WhatsApp Channels do not support them).
+
+## Security posture
+
+- Bind to `127.0.0.1`; expose over Tailscale, never the public internet.
+- UI: HTTP Basic (`BRIDGE_TOKEN`), CSRF token on every form, `Sec-Fetch-Site`/`Origin` guard, per-IP auth throttling.
+- Strict CSP, `nosniff`, frame denial, no inline scripts, hashed asset versions.
+- Webhook requires an HMAC-SHA256 signature; MCP and control endpoints require a bearer token.
+- Uploads: 20 MB cap, per-type extension whitelist, media served only through an authenticated, path-validated route.
+
+Report vulnerabilities per [`SECURITY.md`](SECURITY.md).
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Processes, ports, data model, request flows, decisions |
+| [`docs/API-MCP.md`](docs/API-MCP.md) | HTTP endpoints and all MCP tools with examples |
+| [`docs/DEPLOY.md`](docs/DEPLOY.md) | Install, upgrade, Termux, systemd, Tailscale, backup |
+| [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Tests, audit, static assets, conventions |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | The failures that actually happen |
+| [`docs/AUDIT.md`](docs/AUDIT.md) | Security and performance audit (Arabic) |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
+
+## Development
 
 ```bash
-BASE=http://127.0.0.1:8085 bash scripts/audit.sh   # 17 فحصًا: ترجمة، اختبارات، أسرار، CSRF، ترويسات، أصول
+cd bridge && python3 -m unittest discover -s tests -v     # unit tests
+cd .. && python3 scripts/e2e_local.py                      # end-to-end (fake GOWA)
+BASE=http://127.0.0.1:8085 bash scripts/audit.sh           # 19 static/security checks
 ```
 
-التقرير الكامل ونتائج الإصلاح: `docs/AUDIT.md` (نتيجة آخر تشغيل: 17/17 · Lighthouse 100/100/100/100).
+Measured with Lighthouse mobile (360 px, 4× CPU, slow 4G): **100 performance · 100 accessibility · 100 best practices · 100 SEO**, LCP 0.9 s, CLS 0.
 
-## التطوير والاختبار
+## Contributing
+
+Issues and pull requests are welcome — read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. By participating you agree to the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
+
+---
+
+## بالعربية
+
+نظام CRM خفيف لقناة واتساب يعمل كله على الجوال: إدارة محتوى بمراحل (مسودة → معتمد ومجدول → منشور/ملغى)، عملاء وفرص، وقياسات القناة، بواجهة عربية RTL، مع وكيل ذكاء (PicoClaw) يتصل به عبر MCP.
 
 ```bash
-cd bridge && python3 -m unittest discover -s tests -v     # 14 اختبارًا
-cd .. && python3 scripts/e2e_local.py                      # 19 فحصًا عبر HTTP حقيقي
+git clone https://github.com/ncecpmotv-cell/whatsapp-channel-crm
+cd whatsapp-channel-crm && bash scripts/install.sh
 ```
 
-`e2e_local.py` يشغّل GOWA وهميًا + الجسر الحقيقي ويتحقق من: توقيع webhook، إنشاء
-جهة اتصال من رسالة، عرض الواجهة ومصادقتها، مسودة → اقتراح وقت → موافقة بشرية →
-نشر عبر الطابور، أرشفة القناة، وتحديث القياسات.
+- التنزيل يجلب أحدث إصدارات GOWA وPicoClaw، ويولّد الأسرار، ويشغّل الخدمات.
+- `~/.whatsapp-crm/bin/crmctl status` للحالة، و`bash scripts/install.sh --qr` لمسح رمز الاقتران.
+- النشر قرار بشري دائمًا؛ الوكيل يكتب ويقترح فقط (يُغيّر بـ`AGENT_CAN_PUBLISH=1`).
+- الوصول عبر Tailscale فقط: `tailscale serve --bg --https=443 http://127.0.0.1:8085`.
 
-## MCP tools
-
-`crm_search` · `crm_get` · `crm_create_channel_post` · `crm_update_channel_post` ·
-`content_schedule` · `crm_list_ready_posts` · `channel_metrics` · `contact_upsert` ·
-`deal_update` · `followups_due` · `wa_send` · `wa_channel_messages` · `bridge_health`
-
-## ملفات
-
-- `bridge/crm.py` — نموذج البيانات (SQLite) وسير المحتوى.
-- `bridge/service.py` — الوارد من واتساب، الطابور، النشر، القياسات.
-- `bridge/mcp.py` — واجهة الوكيل + سياسة الموافقة.
-- `bridge/ui.py` + `bridge/app.py` — واجهة عربية وخادم HTTP واحد.
-- `scripts/upgrade-to-crm.sh` — النشر على الجوال.
-- `docs/LEGACY-espocrm-bridge.md` — توثيق النسخة القديمة (EspoCRM) للرجوع.
+الدليل الكامل: [`docs/DEPLOY.md`](docs/DEPLOY.md) · تقرير التدقيق: [`docs/AUDIT.md`](docs/AUDIT.md).

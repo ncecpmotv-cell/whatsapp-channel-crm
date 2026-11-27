@@ -1,9 +1,9 @@
 """GOWA REST client + webhook signature verification (stdlib only)."""
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
-import base64
 import json
 import os
 import urllib.error

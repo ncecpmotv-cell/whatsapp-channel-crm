@@ -12,20 +12,20 @@ from __future__ import annotations
 import base64
 import gzip
 import hashlib
-from email.parser import BytesParser
-from email.policy import default as email_policy
 import hmac
-import mimetypes
-import struct
-import threading
-import time as _time
 import json
 import logging
+import mimetypes
 import os
 import re
+import struct
 import sys
+import threading
 import time
+import time as _time
 import uuid
+from email.parser import BytesParser
+from email.policy import default as email_policy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -217,6 +217,25 @@ class Handler(BaseHTTPRequestHandler):
                 return False
         return False
 
+    def _csrf_token(self) -> str:
+        token = self.bridge.cfg.bridge_token or ""
+        return hashlib.sha256((token + "|crm-csrf-v1").encode()).hexdigest()[:32] if token else ""
+
+    def _csrf_ok(self, raw: bytes) -> bool:
+        expected = self._csrf_token()
+        if not expected:
+            return True
+        supplied = self.headers.get("X-CSRF-Token") or ""
+        if not supplied and raw:
+            try:
+                if (self.headers.get("Content-Type") or "").startswith("multipart/form-data"):
+                    supplied = (self._parse_multipart(raw)[0].get("csrf") or "")
+                else:
+                    supplied = (self._form(raw)[0].get("csrf") or "")
+            except Exception:  # noqa: BLE001 - malformed body -> no token
+                supplied = ""
+        return bool(supplied) and hmac.compare_digest(expected, supplied)
+
     def _auth_throttled(self) -> bool:
         ip = self.client_address[0]
         now = _time.time()
@@ -345,6 +364,7 @@ class Handler(BaseHTTPRequestHandler):
     def _ui_get(self, path: str, query: dict):
         ui.set_flash(self.FLASH.get((query.get("ok") or [""])[0], ""))
         ui.set_header_action("")
+        ui.set_csrf(self._csrf_token())
         crm = self.bridge.crm
         ui.TZ_OFFSET = self.bridge.cfg.tz_offset
         ui.set_unread(crm.unread_notifications())
@@ -473,6 +493,8 @@ class Handler(BaseHTTPRequestHandler):
                 return None
             if not self._same_origin():
                 return self._send(403, {"error": "cross-site request rejected"})
+            if not self._csrf_ok(raw):
+                return self._send(403, {"error": "invalid csrf token"})
             return self._ui_post(path, raw)
 
         return self._send(404, {"error": "not found"})

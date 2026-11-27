@@ -1,4 +1,4 @@
-"""CRM storage on SQLite — replaces EspoCRM + MariaDB on the phone.
+"""CRM storage on one SQLite file — content pipeline, contacts, deals, metrics.
 
 One file, one connection (shared with the bridge's outbox), stdlib only.
 The public surface mirrors the old EspoClient so the rest of the bridge and
@@ -219,17 +219,23 @@ class CrmClient:
             existing = rec
         fields, params = [], []
         if name:
-            fields.append("name = ?"); params.append(name)
+            fields.append("name = ?")
+            params.append(name)
         if org:
-            fields.append("org = ?"); params.append(org)
+            fields.append("org = ?")
+            params.append(org)
         if stage and stage in CONTACT_STAGES:
-            fields.append("stage = ?"); params.append(stage)
+            fields.append("stage = ?")
+            params.append(stage)
         if tags is not None:
-            fields.append("tags = ?"); params.append(",".join(tags))
+            fields.append("tags = ?")
+            params.append(",".join(tags))
         if notes:
-            fields.append("notes = ?"); params.append(notes)
+            fields.append("notes = ?")
+            params.append(notes)
         if fields:
-            fields.append("updated_at = ?"); params.append(_now())
+            fields.append("updated_at = ?")
+            params.append(_now())
             params.append(existing["id"])
             self._exec(f"UPDATE crm_contacts SET {', '.join(fields)} WHERE id = ?", tuple(params))
         return self.get_contact(existing["id"]) or existing
@@ -322,8 +328,10 @@ class CrmClient:
             for col, val in (("title", title), ("value", value), ("stage", stage),
                              ("next_action_at", next_action_at), ("notes", notes)):
                 if val is not None:
-                    fields.append(f"{col} = ?"); params.append(val)
-            fields.append("updated_at = ?"); params.append(ts)
+                    fields.append(f"{col} = ?")
+                    params.append(val)
+            fields.append("updated_at = ?")
+            params.append(ts)
             params.append(deal_id)
             self._exec(f"UPDATE crm_deals SET {', '.join(fields)} WHERE id = ?", tuple(params))
             return self._one("SELECT * FROM crm_deals WHERE id = ?", (deal_id,)) or {}
@@ -405,7 +413,8 @@ class CrmClient:
             params.append(value)
         if not sets:
             return self.get_channel_post(post_id) or {}
-        sets.append("updated_at = ?"); params.append(_now())
+        sets.append("updated_at = ?")
+        params.append(_now())
         params.append(post_id)
         self._exec(f"UPDATE crm_posts SET {', '.join(sets)} WHERE id = ?", tuple(params))
         return self.get_channel_post(post_id) or {}
