@@ -13,6 +13,13 @@
 - [ ] `BASE=http://127.0.0.1:8085 bash scripts/audit.sh` (if a running instance was available)
 - [ ] UI change: 360 px screenshot attached, Lighthouse not lower than before
 
+## Documentation contract
+
+- [ ] `docs/features/000N-<slug>.md` added or updated (Why / How / Verify / Limits)
+- [ ] The page is linked from `docs/features/README.md`
+- [ ] Its roadmap id exists in `ROADMAP.md` (and the row moved if it shipped)
+- [ ] `python3 scripts/check_docs.py` passes locally
+
 ## Checklist
 
 - [ ] No new runtime dependency (or the PR body justifies it with impact, cost and the alternative)

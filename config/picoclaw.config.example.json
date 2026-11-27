@@ -1,0 +1,40 @@
+{
+  "//": "Sanitized example of the keys this project touches. Generate the real file with `picoclaw config reset` and let `picoclaw mcp add` write the CRM entry. Secrets never live here — they go to .security.yml (mode 600).",
+  "version": 1,
+  "agents": {
+    "defaults": {
+      "workspace": "~/.whatsapp-crm/picoclaw/workspace",
+      "provider": "openai",
+      "model_name": "<your-model>",
+      "max_tokens": 4096,
+      "max_tool_iterations": 8
+    }
+  },
+  "channel_list": {
+    "telegram": {
+      "enabled": true,
+      "type": "telegram",
+      "allow_from": ["<your-telegram-user-id>"],
+      "settings": {}
+    }
+  },
+  "tools": {
+    "mcp": {
+      "servers": {
+        "crm": {
+          "enabled": true,
+          "type": "http",
+          "url": "http://127.0.0.1:8085/mcp",
+          "headers": {
+            "Authorization": "Bearer <BRIDGE_TOKEN>"
+          }
+        }
+      }
+    }
+  },
+  "gateway": {
+    "host": "127.0.0.1",
+    "port": 18790,
+    "log_level": "warn"
+  }
+}

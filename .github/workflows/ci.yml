@@ -27,6 +27,8 @@ jobs:
         run: python -m unittest discover -s bridge/tests -v
       - name: End-to-end (fake GOWA, no network)
         run: python scripts/e2e_local.py
+      - name: Documentation contract
+        run: python scripts/check_docs.py
 
   shell:
     name: shell syntax

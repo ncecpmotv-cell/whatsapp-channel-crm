@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-11-27
+
+### Added
+
+- `content-strategist` skill for PicoClaw: measure → diagnose → plan → draft, with a
+  self-review checklist and hard prohibitions (never publish, never invent metrics).
+- Installer copies `picoclaw/skills/` into the PicoClaw home on install and upgrade.
+
+### Docs
+
+- Documentation hub (`docs/README.md`), one page per feature (`docs/features/`), a roadmap
+  with acceptance tests (`ROADMAP.md`), a free-tier integration guide and a PicoClaw config
+  reference with a sanitized example.
+- `scripts/check_docs.py` enforces the contract in CI (headings, index links, roadmap ids,
+  file paths).
+
 ## [2.0.0] — 2026-11-27
 
 First public release of the standalone CRM. It replaces the previous

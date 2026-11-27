@@ -115,7 +115,8 @@ install_crm() {
   say "CRM code -> $ROOT/app"
   if [ -n "$LOCAL_SRC" ]; then
     run mkdir -p "$ROOT/app"
-    run cp -R "$LOCAL_SRC/bridge" "$LOCAL_SRC/scripts" "$LOCAL_SRC/README.md" "$ROOT/app/"
+    run cp -R "$LOCAL_SRC/bridge" "$LOCAL_SRC/scripts" "$LOCAL_SRC/picoclaw" \
+        "$LOCAL_SRC/README.md" "$ROOT/app/"
   elif [ -d "$ROOT/app/.git" ]; then
     run git -C "$ROOT/app" fetch --depth 1 origin main
     run git -C "$ROOT/app" reset --hard origin/main
@@ -181,6 +182,12 @@ setup_pico() {
   PICOCLAW_HOME="$home" "$BIN/picoclaw" mcp add crm "http://127.0.0.1:$BRIDGE_PORT/mcp" \
       -t http -H "Authorization: Bearer $token" -f >/dev/null 2>&1 \
       || warn "could not register the CRM as an MCP server; run: PICOCLAW_HOME=$home $BIN/picoclaw mcp add crm ..."
+  local skills_src="$ROOT/app/picoclaw/skills"
+  if [ -d "$skills_src" ]; then
+    mkdir -p "$home/skills"
+    cp -R "$skills_src/." "$home/skills/" 2>/dev/null || true
+    say "Skills -> $home/skills (content-strategist)"
+  fi
   warn "set the model API key: PICOCLAW_HOME=$home $BIN/picoclaw model"
 }
 

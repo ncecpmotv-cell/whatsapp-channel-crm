@@ -81,6 +81,9 @@ Report vulnerabilities per [`SECURITY.md`](SECURITY.md).
 
 ## Documentation
 
+Start at the hub: **[`docs/README.md`](docs/README.md)** — every guide, every feature record
+and the roadmap in one place.
+
 | Document | Contents |
 |---|---|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Processes, ports, data model, request flows, decisions |
@@ -92,6 +95,10 @@ Report vulnerabilities per [`SECURITY.md`](SECURITY.md).
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Tests, audit, static assets, conventions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | The failures that actually happen |
 | [`docs/AUDIT.md`](docs/AUDIT.md) | Security and performance audit (Arabic) |
+| [`ROADMAP.md`](ROADMAP.md) | What ships next, with acceptance tests and status labels |
+| [`docs/features/`](docs/features/) | One page per feature: why, how, verified, limits |
+| [`docs/INTEGRATIONS-FREE.md`](docs/INTEGRATIONS-FREE.md) | Free tiers for search / images / models |
+| [`docs/PICOCLAW.md`](docs/PICOCLAW.md) | The PicoClaw config we touch and why |
 | [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 
 ## Development
