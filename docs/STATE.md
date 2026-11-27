@@ -42,7 +42,10 @@ edge/ (في الريبو)      Worker بلا حالة: edge_web_extract · edge_
 
 - الوحدات: `gowa · crm · picoclaw · sshd · rtunnel · tailscaled · crond` تعمل.
 - `/health`: `{"ok":true,"crm":true,"origin_guard":{"public_url":true,"tailnet":true},"push":{"enabled":true}}`
-- MCP: **18 أداة** · `content_gaps` (فجوات الموضوعات) و`semantic_search` (BM25 محلي، ~1ms).
+- MCP: **18 أداة محلية** · `content_gaps` (فجوات الموضوعات) و`semantic_search` (BM25 + تجذيع عربي).
+- **edge-mcp** منشور على Cloudflare: `https://edge-mcp.fixed-friend.workers.dev` — 3 أدوات
+  (extract/search/status)، مسجّل في PicoClaw كخادم MCP ثانٍ. مُتحقَّق من الجوال عبر الوكيل:
+  استخراج example.com (172 حرفًا) + `content_gaps` في نفس الدور.
 - PicoClaw: مهارة `content-strategist` مثبّتة، وMCP `crm` مسجّل.
 - الاقتران: `is_logged_in:true` للرقم `966502369637` — بلا QR بعد نقل `storages/`.
 - `doctor.sh`: **22 فحصًا ناجحًا · 0 فشل**.
@@ -78,8 +81,8 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 
 ## مفتوح الآن
 
-- **نشر `edge-mcp`**: الكود جاهز ومُختبر محليًا (13 اختبارًا + جلب حقيقي)، ويحتاج خطوة واحدة
-  بحسابك: `wrangler login` → `secret put EDGE_TOKEN` → `deploy`، ثم `picoclaw mcp add edge`.
+- **مفتاح بحث**: `edge_search` يعمل لكن بلا مفتاح Tavily/Brave يعيد صفرًا (DuckDuckGo يحجب
+  مراكز البيانات). المطلوب: `npx wrangler secret put TAVILY_API_KEY` ثم إعادة نشر.
 - **إشعارات تليجرام**: بانتظار `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (Termux:API يعمل).
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.
