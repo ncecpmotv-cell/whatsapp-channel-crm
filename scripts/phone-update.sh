@@ -26,8 +26,12 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 say "downloading $REPO@$BRANCH"
-curl -fsSL "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH" -o "$tmp/src.tgz" \
-  || die "download failed (is the repo public?)"
+# codeload caches tarballs for a few minutes; without the cache-buster an update can
+# silently re-install the previous commit (observed: a fix "deployed" but not present).
+curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+  "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH?cb=$(date +%s)" \
+  -o "$tmp/src.tgz" || die "download failed (is the repo public?)"
+say "archive $(wc -c <"$tmp/src.tgz" | tr -d ' ') bytes, sha $(sha256sum "$tmp/src.tgz" | cut -c1-12)"
 tar xzf "$tmp/src.tgz" -C "$tmp"
 src="$(find "$tmp" -maxdepth 1 -type d -name '*-*' | head -1)"
 [ -d "$src/bridge" ] || die "unexpected archive layout"
