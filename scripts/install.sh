@@ -311,7 +311,9 @@ $(printf '\033[1;32mDone.\033[0m')
   UI       : http://127.0.0.1:$BRIDGE_PORT/ui   (user: anything · password: BRIDGE_TOKEN)
   secrets  : $ETC/crm.env
   pairing  : bash scripts/install.sh --qr
-  PicoClaw : $ROOT/picoclaw/config.json  (model key + telegram token)
+  PicoClaw : run PICOCLAW_HOME=$ROOT/picoclaw $BIN/picoclaw onboard
+             (model key + telegram bot token, then crmctl restart)
+  Guides   : docs/PAIRING-GOWA.md · docs/TELEGRAM-AGENT.md · docs/CONTENT-PLAYBOOK.md
 
 Private access over Tailscale:
   tailscale serve --bg --https=443 http://127.0.0.1:$BRIDGE_PORT

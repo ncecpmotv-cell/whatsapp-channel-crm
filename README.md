@@ -86,6 +86,9 @@ Report vulnerabilities per [`SECURITY.md`](SECURITY.md).
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Processes, ports, data model, request flows, decisions |
 | [`docs/API-MCP.md`](docs/API-MCP.md) | HTTP endpoints and all MCP tools with examples |
 | [`docs/DEPLOY.md`](docs/DEPLOY.md) | Install, upgrade, Termux, systemd, Tailscale, backup |
+| [`docs/PAIRING-GOWA.md`](docs/PAIRING-GOWA.md) | اقتران واتساب خطوة بخطوة، وماذا تفعل عند الانقطاع |
+| [`docs/TELEGRAM-AGENT.md`](docs/TELEGRAM-AGENT.md) | ربط بوت تليجرام بالوكيل: التوكن، الصلاحيات، الأوامر |
+| [`docs/CONTENT-PLAYBOOK.md`](docs/CONTENT-PLAYBOOK.md) | دورة العمل: تحليل → خطة → مراجعة بشرية → نشر |
 | [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) | Tests, audit, static assets, conventions |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | The failures that actually happen |
 | [`docs/AUDIT.md`](docs/AUDIT.md) | Security and performance audit (Arabic) |
@@ -124,5 +127,6 @@ cd whatsapp-channel-crm && bash scripts/install.sh
 - `~/.whatsapp-crm/bin/crmctl status` للحالة، و`bash scripts/install.sh --qr` لمسح رمز الاقتران.
 - النشر قرار بشري دائمًا؛ الوكيل يكتب ويقترح فقط (يُغيّر بـ`AGENT_CAN_PUBLISH=1`).
 - الوصول عبر Tailscale فقط: `tailscale serve --bg --https=443 http://127.0.0.1:8085`.
+- الاقتران: [`docs/PAIRING-GOWA.md`](docs/PAIRING-GOWA.md) · وكيل تليجرام: [`docs/TELEGRAM-AGENT.md`](docs/TELEGRAM-AGENT.md) · دورة المحتوى: [`docs/CONTENT-PLAYBOOK.md`](docs/CONTENT-PLAYBOOK.md).
 
 الدليل الكامل: [`docs/DEPLOY.md`](docs/DEPLOY.md) · تقرير التدقيق: [`docs/AUDIT.md`](docs/AUDIT.md).
