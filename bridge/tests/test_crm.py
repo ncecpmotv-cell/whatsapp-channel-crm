@@ -129,6 +129,9 @@ class CrmTest(unittest.TestCase):
         self.assertEqual(hits["results"][0]["id"], a["id"])
         # hamza/taa-marbuta normalisation: "الإضاءة" matches "اضاءه"
         self.assertEqual(self.crm.semantic_search("الإضاءة")["results"][0]["id"], a["id"])
+        # light stemming: plural + definite article find the singular stem
+        self.assertEqual(self.crm.semantic_search("المنتجات")["results"][0]["id"], a["id"])
+        self.assertEqual(self.crm.semantic_search("منتج")["results"][0]["id"], a["id"])
 
     def test_content_insights(self):
         now = int(__import__("time").time())

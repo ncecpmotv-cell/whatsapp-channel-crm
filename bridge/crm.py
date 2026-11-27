@@ -179,10 +179,23 @@ def _norm_ar(text: str) -> str:
     return text.lower()
 
 
+def _stem_ar(word: str) -> str:
+    """Very light Arabic stemming: the definite article and common plurals.
+
+    Enough to make «المنتجات» find «منتجات» and «منتج»; not a morphological analyser.
+    """
+    if word.startswith("ال") and len(word) > 4:
+        word = word[2:]
+    for suffix in ("ات", "ون", "ين", "ان", "ها", "هم", "نا", "ية"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
 def _tokens(text: str) -> list[str]:
     """Letters only: the Arabic block contains punctuation (، ؟) that \\w would keep."""
     words = re.findall(r"[^\W\d_]+", _norm_ar(text))
-    return [w for w in words if len(w) >= 3 and w not in _AR_STOP]
+    return [_stem_ar(w) for w in words if len(w) >= 3 and w not in _AR_STOP]
 
 
 def _bigrams(tokens: list[str]) -> list[str]:
