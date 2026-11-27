@@ -77,7 +77,10 @@ def origin_allowed(headers, env=None) -> bool:
     if site and site not in ("same-origin", "same-site", "none"):
         return False
     origin = (headers.get("Origin") or "").strip()
-    if not origin:
+    if not origin or origin.lower() == "null":
+        # ``Origin: null`` is what WebViews (Telegram, some Android browsers) send
+        # for same-origin form posts. Treat it like a missing Origin: the CSRF
+        # token check still runs, and Sec-Fetch-Site was already validated above.
         return True
     parsed = urlparse(origin)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:

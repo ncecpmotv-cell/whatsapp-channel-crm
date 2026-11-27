@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.3] — 2026-11-27
+
+### Fixed
+
+- In-app browsers (Telegram/Android WebView) post forms with `Origin: null`, which the guard
+  rejected even though `Sec-Fetch-Site` said `same-origin`. A null Origin is now treated like
+  a missing one — the CSRF token check still applies, and cross-site requests remain blocked.
+  Diagnosed from the 403 detail added in 3.0.2 (`{"origin":"null", ...}`).
+
 ## [3.0.2] — 2026-11-27
 
 ### Fixed

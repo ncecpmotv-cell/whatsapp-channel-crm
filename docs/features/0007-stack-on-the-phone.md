@@ -66,7 +66,10 @@ logs `cert refresh: … no TailscaleVarRoot` and HTTPS silently fails. The certi
 by ACME on first request; `tailscale cert` is a useful probe.
 
 Because the proxy rewrites `Host` to `127.0.0.1:8085`, every form POST carries
-`Origin: https://smartp.tail16a0c8.ts.net` against a different Host. The env file therefore
+`Origin: https://smartp.tail16a0c8.ts.net` against a different Host. In-app browsers
+(Telegram's WebView on Android is the one the owner uses) send `Origin: null` with
+`Sec-Fetch-Site: same-origin`; a null Origin is therefore treated as absent, and the CSRF
+token remains the deciding check. The env file therefore
 sets `PUBLIC_BASE_URL` and `ALLOW_TAILNET_DOMAIN=tail16a0c8.ts.net`, and the guard reads them
 through `Config` — **not** `os.environ`, which contains only variables the process was started
 with. `/health` returns `origin_guard` booleans so this is diagnosable without guessing.

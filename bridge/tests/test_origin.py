@@ -80,6 +80,14 @@ class OriginTest(unittest.TestCase):
         h = {"Host": "127.0.0.1:8085", "Sec-Fetch-Site": "same-site"}
         self.assertTrue(origin_allowed(h, {}))
 
+    def test_null_origin_from_a_webview_is_allowed(self):
+        """Telegram/Android WebViews post same-origin forms with Origin: null."""
+        h = {"Host": "smartp.tail16a0c8.ts.net", "Origin": "null",
+             "Sec-Fetch-Site": "same-origin"}
+        self.assertTrue(origin_allowed(h, {}))
+        h["Sec-Fetch-Site"] = "cross-site"
+        self.assertFalse(origin_allowed(h, {}))
+
     def test_foreign_origin_is_rejected(self):
         h = {"Host": "smartp.tail16a0c8.ts.net", "Origin": "https://evil.example"}
         self.assertFalse(origin_allowed(h, {}))
