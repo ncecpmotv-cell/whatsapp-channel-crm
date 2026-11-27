@@ -69,6 +69,13 @@ class OriginTest(unittest.TestCase):
         h = {"Host": "127.0.0.1:8085", "Origin": "https://tail16a0c8.ts.net.evil.com"}
         self.assertFalse(origin_allowed(h, {"ALLOW_TAILNET_DOMAIN": "tail16a0c8.ts.net"}))
 
+    def test_tailnet_ip_and_loopback_are_allowed(self):
+        for origin in ("https://100.107.57.87", "http://127.0.0.1:8085", "http://localhost:8085"):
+            h = {"Host": "127.0.0.1:8085", "Origin": origin}
+            self.assertTrue(origin_allowed(h, {}), origin)
+        h = {"Host": "127.0.0.1:8085", "Origin": "http://8.8.8.8"}
+        self.assertFalse(origin_allowed(h, {}))
+
     def test_same_site_fetch_is_allowed(self):
         h = {"Host": "127.0.0.1:8085", "Sec-Fetch-Site": "same-site"}
         self.assertTrue(origin_allowed(h, {}))

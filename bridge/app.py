@@ -13,6 +13,7 @@ import base64
 import gzip
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -94,12 +95,19 @@ def origin_allowed(headers, env=None) -> bool:
         return True
     # MagicDNS names in the same tailnet (smartp, pot-lx1af, …): the owner may
     # open the UI under any of them, and the proxy rewrites Host either way.
+    hostname = wanted.rsplit(":", 1)[0]
+    if hostname == "localhost":
+        return True
     domain = (env.get("ALLOW_TAILNET_DOMAIN") or "").strip().lower().lstrip(".")
-    if domain:
-        hostname = wanted.rsplit(":", 1)[0]
-        if hostname == domain or hostname.endswith("." + domain):
-            return True
-    return False
+    if domain and (hostname == domain or hostname.endswith("." + domain)):
+        return True
+    # The same UI is reachable by tailscale IP and by loopback in a browser on
+    # the phone itself; both are inside the tailnet, so accept them.
+    try:
+        ip = ipaddress.ip_address(hostname)
+    except ValueError:
+        return False
+    return ip.is_loopback or ip in ipaddress.ip_network("100.64.0.0/10")
 
 
 def image_dimensions(data: bytes) -> tuple[int, int] | None:
@@ -556,11 +564,15 @@ class Handler(BaseHTTPRequestHandler):
             if not self._require_basic():
                 return None
             if not self._same_origin():
-                log.warning(
-                    "origin rejected: path=%s origin=%r host=%r xfh=%r site=%r",
-                    path, self.headers.get("Origin"), self.headers.get("Host"),
-                    self.headers.get("X-Forwarded-Host"), self.headers.get("Sec-Fetch-Site"))
-                return self._send(403, {"error": "cross-site request rejected"})
+                detail = {
+                    "origin": self.headers.get("Origin"),
+                    "host": self.headers.get("Host"),
+                    "forwarded_host": self.headers.get("X-Forwarded-Host"),
+                    "site": self.headers.get("Sec-Fetch-Site"),
+                }
+                log.warning("origin rejected: path=%s %s", path, detail)
+                return self._send(403, {"error": "cross-site request rejected",
+                                        "detail": {k: v for k, v in detail.items() if v}})
             if not self._csrf_ok(raw):
                 return self._send(403, {"error": "invalid csrf token"})
             return self._ui_post(path, raw)
