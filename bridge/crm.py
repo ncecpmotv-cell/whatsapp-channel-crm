@@ -186,7 +186,7 @@ def _tokens(text: str) -> list[str]:
 
 
 def _bigrams(tokens: list[str]) -> list[str]:
-    return [f"{a} {b}" for a, b in zip(tokens, tokens[1:])]
+    return [f"{a} {b}" for a, b in zip(tokens, tokens[1:], strict=False)]
 
 
 class CrmClient:
@@ -767,7 +767,7 @@ class CrmClient:
         ]
         per_type.sort(key=lambda x: -x["avg_views"])
         stamps = sorted(int(r["published_at"]) for r in rows if r["published_at"])
-        gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+        gaps = [b - a for a, b in zip(stamps, stamps[1:], strict=False)]
         return {
             "days": days,
             "posts": total,
