@@ -26,7 +26,9 @@ function fakeEnv(extra = {}) {
     },
     BACKUPS: {
       async put(key, bytes, opts = {}) {
-        objects.set(key, { bytes, uploaded: new Date(), customMetadata: opts.customMetadata || {} });
+        // Monotonic timestamps: real uploads are seconds apart, tests are microseconds apart.
+        const uploaded = new Date(Date.now() + objects.size);
+        objects.set(key, { bytes, uploaded, customMetadata: opts.customMetadata || {} });
       },
       async get(key) {
         const hit = objects.get(key);

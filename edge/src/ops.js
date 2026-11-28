@@ -115,7 +115,8 @@ async function listObjects(env) {
 // and a stale read made an earlier version delete the three newest archives instead of the oldest.
 async function enforceRetention(env) {
   const keep = budget(env, "keepBackups");
-  const items = (await listObjects(env)).sort((a, b) => b.uploaded - a.uploaded);
+  const items = (await listObjects(env)).sort((a, b) =>
+    (b.uploaded - a.uploaded) || b.name.localeCompare(a.name));
   const pruned = [];
   for (const old of items.slice(keep)) {
     await env.BACKUPS.delete(`backups/${old.name}.enc`);
@@ -164,7 +165,8 @@ export async function handleBackupPut(request, env, url) {
 
 export async function handleBackupList(env) {
   if (!env.BACKUPS) return json({ error: "R2 binding BACKUPS is missing" }, 501);
-  const items = (await listObjects(env)).sort((a, b) => b.uploaded - a.uploaded);
+  const items = (await listObjects(env)).sort((a, b) =>
+    (b.uploaded - a.uploaded) || b.name.localeCompare(a.name));
   const used = items.reduce((sum, item) => sum + item.packedSize, 0);
   return json({ ok: true, count: items.length, usedMB: mb(used),
                 budgetMB: budget(env, "maxTotalMb"), keep: budget(env, "keepBackups"),
