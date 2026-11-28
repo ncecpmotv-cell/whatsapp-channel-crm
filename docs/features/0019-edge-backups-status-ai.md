@@ -36,8 +36,13 @@ cd edge && npm test          # 23 tests: round-trip, auth, status, retention, AI
 python3 -m unittest bridge.tests.test_edge   # 5 client tests + 2 brand tests
 ```
 
-Measured locally: a 40 KB archive encrypts to ~40 KB, decrypts byte-identical; the status page
-flips to «متوقف عن الإرسال» once the heartbeat is an hour old.
+Measured in the real Workers runtime (`wrangler dev --local`, workerd with R2/KV emulation):
+a 20 KB payload encrypted to 20,028 bytes (+12 IV, +16 tag), downloaded byte-identical
+(sha256 match), heartbeat flipped `/status` to «يعمل · آخر نبضة قبل 0 دقيقة», and a wrong token
+returned 401. Then end-to-end from the phone through a temporary SSH tunnel: a real 41 KB,
+44-post archive uploaded (41,199 packed), the heartbeat accepted, and both archives listed by
+`/backup`. Workers AI answers `Binding AI needs to run remotely` in local mode — expected, and
+proof that the error path is explicit rather than silent.
 
 ## Limits
 
