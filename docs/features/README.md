@@ -29,6 +29,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0021](0021-cost-guardrails.md) | Cost guardrails: refuse instead of billing | shipped | R-30 |
 | [0022](0022-radar-and-reporting-board.md) | Trend radar + a board that reports every feature | shipped | R-31 |
 | [0023](0023-editorial-board-and-agent-guard.md) | Editorial board (two phases) + human-only agent gate | shipped | R-32 |
+| [0024](0024-editable-identity-and-visual-spec.md) | Editable identity + `crm_visual_brief` enforcement | shipped | R-33 |
 
 ## Adding one
 

@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] — 2026-11-28
+
+### Added
+
+- **The identity is editable in the app**: `/ui/brand` is a validated form (palette pickers, fonts,
+  formats, do/don't, logo policy, text-on-image rules, channel limits); every save bumps `version`
+  and `updated_at`.
+- **`crm_visual_brief(kind, topic)`**: the resolved visual spec — background/text/accent hex,
+  format, fonts, logo policy, never-list and five imperative rules. 38 MCP tools.
+- **Media lint**: `visual_brief_missing`, `brand_violation`, `off_palette`.
+- `channel-brand` skill now orders the agent to fetch the spec before any visual draft, pass it
+  through unchanged, and stop and ask when the identity is empty.
+
+### Fixed
+
+- The brand scan read its own `never` list and flagged every correct brief as a violation; the
+  scan now covers descriptive fields only.
+
 ## [4.2.0] — 2026-11-28
 
 ### Added
