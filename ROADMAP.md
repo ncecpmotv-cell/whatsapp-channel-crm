@@ -90,6 +90,7 @@ types and proposed times, all in `draft`.
 | R-27 | Search page, media library, A/B variants | v3.8.0 | [0018](docs/features/0018-search-media-variants.md) |
 | R-28 | Off-site encrypted backups + status + Workers AI | v4.0.0 | [0019](docs/features/0019-edge-backups-status-ai.md) |
 | R-29 | Brand kit as data + agent guardrails | v4.0.0 | [0020](docs/features/0020-brand-kit.md) |
+| R-30 | Cost guardrails: hard caps, `/usage`, list-based retention | v4.0.2 | [0021](docs/features/0021-cost-guardrails.md) |
 
 ---
 

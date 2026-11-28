@@ -12,10 +12,47 @@
  */
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
-const MAX_BACKUP_BYTES = 25 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
-const KEEP_BACKUPS = 30;
+
+// Cost guardrails. Cloudflare bills storage/month and operations once the free tier is passed
+// (R2: 10GB, 1M Class A, 10M Class B; Workers AI: 10k neurons/day). Every limit below is a hard
+// refusal, not a warning, so no feature can quietly grow into an invoice.
+const BUDGET = {
+  keepBackups: 3,        // rolling archives — 3 × ~40KB ≈ 120KB
+  maxBackupMb: 8,        // a single archive
+  maxTotalMb: 64,        // everything in R2
+  aiDailyLimit: 40,      // AI calls per UTC day
+};
+
+const ENV_KEYS = { keepBackups: "KEEP_BACKUPS", maxBackupMb: "MAX_BACKUP_MB",
+                   maxTotalMb: "MAX_TOTAL_MB", aiDailyLimit: "AI_DAILY_LIMIT" };
+
+function budget(env, name) {
+  const value = Number(env[ENV_KEYS[name]]);
+  return Number.isFinite(value) && value > 0 ? value : BUDGET[name];
+}
+
+const mb = (bytes) => Math.round((bytes / (1024 * 1024)) * 100) / 100;
+
+function indexBytes(index) {
+  return index.reduce((sum, item) => sum + (Number(item.packedSize) || 0), 0);
+}
+
+async function readIndex(env) {
+  return (await env.STATUS.get("backup:index", "json")) || [];
+}
+
+// Workers AI bills neurons after 10k/day; count calls in KV so a chatty day cannot cost money.
+async function aiSpend(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  const key = `ai:${day}`;
+  const cap = budget(env, "aiDailyLimit");
+  const used = Number(await env.STATUS.get(key)) || 0;
+  if (used >= cap) return { ok: false, used, cap };
+  await env.STATUS.put(key, String(used + 1), { expirationTtl: 172800 });
+  return { ok: true, used: used + 1, cap };
+}
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
@@ -61,13 +98,54 @@ export async function decrypt(packed, env) {
 }
 
 // ---------------------------------------------------------------- backups
+const stripKey = (key) => key.replace(/^backups\//, "").replace(/\.enc$/, "");
+
+async function listObjects(env) {
+  const listed = await env.BACKUPS.list({ prefix: "backups/", include: ["customMetadata"] });
+  return listed.objects.map((object) => ({
+    name: stripKey(object.key),
+    packedSize: object.size,
+    plainSize: Number(object.customMetadata?.plainSize) || 0,
+    at: new Date(object.uploaded).toISOString(),
+    uploaded: object.uploaded,
+  }));
+}
+
+// Retention is decided by R2's own listing, never by the KV index: KV is eventually consistent,
+// and a stale read made an earlier version delete the three newest archives instead of the oldest.
+async function enforceRetention(env) {
+  const keep = budget(env, "keepBackups");
+  const items = (await listObjects(env)).sort((a, b) => b.uploaded - a.uploaded);
+  const pruned = [];
+  for (const old of items.slice(keep)) {
+    await env.BACKUPS.delete(`backups/${old.name}.enc`);
+    pruned.push(old.name);
+  }
+  const kept = items.slice(0, keep);
+  await env.STATUS.put("backup:index", JSON.stringify(
+    kept.map(({ name, plainSize, packedSize, at }) => ({ name, plainSize, packedSize, at }))));
+  return { kept, pruned, bytes: kept.reduce((sum, item) => sum + item.packedSize, 0) };
+}
+
 export async function handleBackupPut(request, env, url) {
   if (!env.BACKUPS) return json({ error: "R2 binding BACKUPS is missing" }, 501);
+  const maxBytes = budget(env, "maxBackupMb") * 1024 * 1024;
   const declared = Number(request.headers.get("content-length") || 0);
-  if (declared > MAX_BACKUP_BYTES) return json({ error: "archive too large" }, 413);
+  if (declared > maxBytes) {
+    return json({ error: `archive exceeds ${budget(env, "maxBackupMb")}MB budget`, limit: true }, 413);
+  }
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!raw.length) return json({ error: "empty body" }, 400);
-  if (raw.length > MAX_BACKUP_BYTES) return json({ error: "archive too large" }, 413);
+  if (raw.length > maxBytes) {
+    return json({ error: `archive exceeds ${budget(env, "maxBackupMb")}MB budget`, limit: true }, 413);
+  }
+  const listed = await listObjects(env);
+  const used = listed.reduce((sum, item) => sum + item.packedSize, 0);
+  const maxTotal = budget(env, "maxTotalMb") * 1024 * 1024;
+  if (used + raw.length > maxTotal) {
+    return json({ error: `off-site storage budget ${budget(env, "maxTotalMb")}MB is full`,
+                  usedMB: mb(used), limit: true }, 507);
+  }
 
   const name = (url.searchParams.get("name") || `crm-${Date.now()}.tar.gz`)
     .replace(/[^A-Za-z0-9._-]/g, "");
@@ -78,21 +156,44 @@ export async function handleBackupPut(request, env, url) {
     httpMetadata: { contentType: "application/octet-stream" },
     customMetadata: { plainSize: String(raw.length), uploadedAt: new Date().toISOString() },
   });
-  const index = (await env.STATUS.get("backup:index", "json")) || [];
-  index.unshift({ name, plainSize: raw.length, packedSize: packed.length,
-                  at: new Date().toISOString() });
-  const kept = index.slice(0, KEEP_BACKUPS);
-  for (const old of index.slice(KEEP_BACKUPS)) {
-    await env.BACKUPS.delete(`backups/${old.name}.enc`).catch(() => {});
-  }
-  await env.STATUS.put("backup:index", JSON.stringify(kept));
+  const retention = await enforceRetention(env);
   return json({ ok: true, name, plainSize: raw.length, packedSize: packed.length,
-                kept: kept.length });
+                kept: retention.kept.length, pruned: retention.pruned,
+                usedMB: mb(retention.bytes), budgetMB: budget(env, "maxTotalMb") });
 }
 
 export async function handleBackupList(env) {
-  const index = (await env.STATUS.get("backup:index", "json")) || [];
-  return json({ ok: true, count: index.length, backups: index });
+  if (!env.BACKUPS) return json({ error: "R2 binding BACKUPS is missing" }, 501);
+  const items = (await listObjects(env)).sort((a, b) => b.uploaded - a.uploaded);
+  const used = items.reduce((sum, item) => sum + item.packedSize, 0);
+  return json({ ok: true, count: items.length, usedMB: mb(used),
+                budgetMB: budget(env, "maxTotalMb"), keep: budget(env, "keepBackups"),
+                backups: items.map(({ name, plainSize, packedSize, at }) =>
+                  ({ name, plainSize, packedSize, at })) });
+}
+
+// Deletes objects the index no longer knows about. Run it by hand after a failed prune or a
+// manual KV edit; it is the only endpoint that lists the bucket (1 Class A operation per call).
+export async function handleBackupPrune(env) {
+  if (!env.BACKUPS) return json({ error: "R2 binding BACKUPS is missing" }, 501);
+  const retention = await enforceRetention(env);
+  return json({ ok: true, kept: retention.kept.length, pruned: retention.pruned,
+                usedMB: mb(retention.bytes) });
+}
+
+// Everything the owner needs to see headroom without touching R2 (KV reads only).
+export async function handleUsage(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  const index = await readIndex(env);
+  const aiUsed = Number(await env.STATUS.get(`ai:${day}`)) || 0;
+  return json({
+    ok: true,
+    day,
+    backups: { count: index.length, keep: budget(env, "keepBackups"),
+               usedMB: mb(indexBytes(index)), budgetMB: budget(env, "maxTotalMb") },
+    ai: { used: aiUsed, limit: budget(env, "aiDailyLimit") },
+    r2Billing: "free tier: 10GB storage, 1M Class A, 10M Class B per month",
+  });
 }
 
 export async function handleBackupGet(env, url) {
@@ -205,6 +306,11 @@ export async function handleTranscribe(request, env) {
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!raw.length) return json({ error: "empty audio" }, 400);
   if (raw.length > MAX_AUDIO_BYTES) return json({ error: "audio too large" }, 413);
+  const spend = await aiSpend(env);
+  if (!spend.ok) {
+    return json({ error: `AI daily budget of ${spend.cap} calls is spent`, usage: spend,
+                  limit: true }, 429);
+  }
   const errors = [];
   for (const model of TRANSCRIBE_MODELS) {
     try {
@@ -224,6 +330,11 @@ export async function handleCaption(request, env) {
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!raw.length) return json({ error: "empty image" }, 400);
   if (raw.length > MAX_IMAGE_BYTES) return json({ error: "image too large" }, 413);
+  const spend = await aiSpend(env);
+  if (!spend.ok) {
+    return json({ error: `AI daily budget of ${spend.cap} calls is spent`, usage: spend,
+                  limit: true }, 429);
+  }
   const mime = imageMime(raw, (request.headers.get("content-type") || "").split(";")[0]);
   const prompt = "صف الصورة في سطر عربي واحد، ثم أعط ثلاث هاشتاقات مناسبة. "
     + 'أجب بصيغة JSON فقط: {"description":"","hashtags":["#"]}';

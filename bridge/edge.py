@@ -103,6 +103,17 @@ class EdgeClient:
         except ValueError:
             return []
 
+    def usage(self) -> dict:
+        if not self.enabled():
+            return {}
+        status, body = self._request("GET", "/usage")
+        if status != 200:
+            return {}
+        try:
+            return json.loads(body)
+        except ValueError:
+            return {}
+
     def transcribe(self, path: str) -> dict:
         return self._blob("/ai/transcribe", path, 8 * 1024 * 1024)
 

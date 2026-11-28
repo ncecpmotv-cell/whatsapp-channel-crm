@@ -26,6 +26,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0018](0018-search-media-variants.md) | Search page, media library, A/B variants | shipped | R-27 |
 | [0019](0019-edge-backups-status-ai.md) | Off-site encrypted backups, status page, Workers AI | shipped* | R-28 |
 | [0020](0020-brand-kit.md) | Brand kit as data + agent limits | shipped | R-29 |
+| [0021](0021-cost-guardrails.md) | Cost guardrails: refuse instead of billing | shipped | R-30 |
 
 ## Adding one
 

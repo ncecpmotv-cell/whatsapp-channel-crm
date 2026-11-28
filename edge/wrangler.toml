@@ -11,11 +11,16 @@ compatibility_date = "2026-11-01"
 # Variables (public, safe to commit):
 [vars]
 MAX_CHARS = "6000"
+# Cost guardrails — hard refusals, not warnings. Free tier: R2 10GB / 1M Class A / 10M Class B
+# per month, Workers AI 10,000 neurons per day. These numbers keep the project at ~0.2% of it.
+KEEP_BACKUPS = "3"
+MAX_BACKUP_MB = "8"
+MAX_TOTAL_MB = "64"
+AI_DAILY_LIMIT = "40"
 
-# R2 is disabled until the bucket is enabled in the dashboard (code 10042).
-# [[r2_buckets]]
-# binding = "BACKUPS"
-# bucket_name = "crm-backups"
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "crm-backups"
 
 [[kv_namespaces]]
 binding = "STATUS"

@@ -469,7 +469,9 @@ class Handler(BaseHTTPRequestHandler):
                     state["last_heartbeat_at"] = crm.store.get_meta("last_heartbeat_at")
                     state["last_offsite_at"] = crm.store.get_meta("last_offsite_at")
                     state["last_offsite_name"] = crm.store.get_meta("last_offsite_name")
-                    state["offsite_backups"] = len(client.backups())
+                    listing = client.backups()
+                    state["offsite_backups"] = len(listing)
+                    state["usage"] = client.usage()
             except Exception:
                 pass
             return self._send_html(200, ui.edge_page(state))

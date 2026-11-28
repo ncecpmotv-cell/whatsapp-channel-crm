@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.2] — 2026-11-28
+
+### Added
+
+- **Cost guardrails everywhere** (owner rule: the project never uses the paid tier): hard budgets
+  for archive count (3), single archive (8MB), total storage (64MB, `507`) and Workers AI calls
+  (40/day, `429`), all overridable from `wrangler.toml`.
+- `GET /usage` and a live `/ui/edge` panel: backups kept/limit, MB used/budget, AI calls used/limit.
+- `POST /backup/prune` re-applies retention by hand.
+
+### Fixed
+
+- **Retention now decides from R2's listing, not the KV index.** KV is eventually consistent and a
+  stale read deleted the three newest archives while keeping the two oldest. Deletes are driven by
+  `uploaded` timestamps from `R2.list`, and KV is rewritten as a cache afterwards.
+- `budget()` read `env[maxTotalMb]` while the vars are `MAX_TOTAL_MB`; every limit silently fell
+  back to its default. The mapping is explicit now, and a test proves `MAX_TOTAL_MB` is honoured.
+
 ## [4.0.1] — 2026-11-28
 
 ### Fixed

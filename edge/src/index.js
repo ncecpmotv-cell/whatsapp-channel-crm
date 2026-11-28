@@ -13,7 +13,8 @@
  */
 
 import {
-  authorised, handleBackupGet, handleBackupList, handleBackupPut, handleCaption,
+  authorised, handleBackupGet, handleBackupList, handleBackupPrune, handleBackupPut, handleCaption,
+  handleUsage,
   handleHeartbeat, handleStatus, handleTranscribe,
 } from "./ops.js";
 
@@ -313,9 +314,13 @@ export default {
     }
     if (url.pathname === "/status") return handleStatus(env);
 
-    const ops = ["/backup", "/heartbeat", "/ai/transcribe", "/ai/caption"];
+    const ops = ["/backup", "/backup/prune", "/heartbeat", "/usage", "/ai/transcribe",
+                 "/ai/caption"];
     if (ops.includes(url.pathname)) {
       if (!authorised(request, env)) return json({ error: "unauthorized" }, 401);
+      if (url.pathname === "/backup/prune" && request.method === "POST") {
+        return handleBackupPrune(env);
+      }
       if (url.pathname === "/backup") {
         if (request.method === "POST") return handleBackupPut(request, env, url);
         if (request.method === "GET" && url.searchParams.get("name")) {
@@ -323,6 +328,7 @@ export default {
         }
         return handleBackupList(env);
       }
+      if (url.pathname === "/usage") return handleUsage(env);
       if (url.pathname === "/heartbeat" && request.method === "POST") {
         return handleHeartbeat(request, env);
       }

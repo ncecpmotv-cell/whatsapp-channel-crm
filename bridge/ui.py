@@ -993,19 +993,26 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 # ----------------------------------------------------------------- notifications
 def edge_page(state: dict) -> bytes:
     enabled = state.get("enabled")
+    usage = state.get("usage") or {}
+    backups = usage.get("backups") or {}
+    ai = usage.get("ai") or {}
     rows = [
         ("حالة الحافة", "مفعّلة" if enabled else "غير مهيّأة"),
         ("إصدار العامل", state.get("version") or "—"),
         ("آخر نبضة", fmt_ts(state.get("last_heartbeat_at"))),
         ("آخر نسخة خارجية", fmt_ts(state.get("last_offsite_at"))),
         ("ملف النسخة", state.get("last_offsite_name") or "—"),
-        ("نسخ محفوظة سحابيًا", state.get("offsite_backups", 0)),
+        ("نسخ محفوظة سحابيًا", f'{state.get("offsite_backups", 0)} / {backups.get("keep", "—")}'),
+        ("مساحة مستخدمة", f'{backups.get("usedMB", 0)} / {backups.get("budgetMB", "—")} MB'),
+        ("استدعاءات الذكاء اليوم", f'{ai.get("used", 0)} / {ai.get("limit", "—")}'),
     ]
     cards = "".join(f'<div class="stat"><b>{esc(v)}</b><span>{esc(k)}</span></div>' for k, v in rows)
     body = f"""
 <h1>التشغيل والحافة</h1>
 <div class="grid">{cards}</div>
 <p class="muted">النبضة كل 5 دقائق، والنسخة المشفّرة تُرفع بعد كل نسخة محلية ناجحة.</p>
+<p class="muted">الحدود مقصودة: الاحتفاظ بآخر 3 نسخ، وسقف 8MB للنسخة و64MB للمجموع و40 استدعاء ذكاء يوميًا —
+حدود صارمة تُرفض عندها الطلبات، حتى لا تتجاوز الطبقة المجانية.</p>
 """
     return page("التشغيل", body, "today")
 
