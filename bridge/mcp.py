@@ -615,6 +615,15 @@ class McpServer:
         if not args.get("id"):
             raise McpError(-32602, "id is required")
         fields = {k: args[k] for k in ("name", "body") if args.get(k) is not None}
+        if isinstance(args.get("meta"), dict):
+            # merge, never replace: visual_brief and angle_id must survive a metadata write
+            current = self.crm.get_channel_post(args["id"]) or {}
+            try:
+                existing = json.loads(current.get("meta") or "{}")
+            except ValueError:
+                existing = {}
+            existing.update(args["meta"])
+            fields["meta"] = json.dumps(existing, ensure_ascii=False)
         requested = args.get("status")
         if requested in ("scheduled", "published") and self.caller == "agent":
             self._human_only("scheduling or publishing")
