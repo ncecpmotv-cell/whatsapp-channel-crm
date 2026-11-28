@@ -264,13 +264,29 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         log.info("%s - %s", self.address_string(), fmt % args)
 
-    def _bearer_ok(self) -> bool:
-        token = self.bridge.cfg.bridge_token or ""
+    def _bearer_token(self) -> str:
         supplied = self.headers.get("X-Bridge-Token") or ""
         auth = self.headers.get("Authorization") or ""
         if auth.lower().startswith("bearer "):
             supplied = auth[7:].strip()
-        return bool(token) and hmac.compare_digest(token, supplied)
+        return supplied
+
+    def _bearer_ok(self) -> bool:
+        """The human token and the agent token are both valid — but not equally trusted."""
+        cfg = self.bridge.cfg
+        supplied = self._bearer_token()
+        token = cfg.bridge_token or ""
+        if token and supplied and hmac.compare_digest(token, supplied):
+            return True
+        agent = getattr(cfg, "agent_token", "") or ""
+        return bool(agent and supplied) and hmac.compare_digest(agent, supplied)
+
+    def _caller(self) -> str:
+        agent = getattr(self.bridge.cfg, "agent_token", "") or ""
+        supplied = self._bearer_token()
+        if agent and supplied and hmac.compare_digest(agent, supplied):
+            return "agent"
+        return "human"
 
     def _basic_ok(self) -> bool:
         """UI auth: any username, password = BRIDGE_TOKEN (browser prompt)."""
@@ -606,8 +622,9 @@ class Handler(BaseHTTPRequestHandler):
             headers = {}
             if isinstance(payload, dict) and payload.get("method") == "initialize":
                 headers["Mcp-Session-Id"] = new_session_id()
+            caller = self._caller()
             if isinstance(payload, list):
-                responses = [r for r in (self.mcp.handle(item) for item in payload
+                responses = [r for r in (self.mcp.handle(item, caller=caller) for item in payload
                                          if isinstance(item, dict)) if r is not None]
                 return self._send(200, responses, headers)
             if not isinstance(payload, dict):

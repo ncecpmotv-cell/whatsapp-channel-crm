@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import uuid
 
 from gowa import GowaError
@@ -208,6 +209,16 @@ TOOLS = [
             "type": "object",
             "properties": {"path": {"type": "string"}},
             "required": ["path"],
+        },
+    },
+    {
+        "name": "crm_editorial_brief",
+        "description": "One compact briefing for planning: channel numbers, best slots, content "
+                       "gaps, radar angles, current plan state and the brand limits. Call this "
+                       "first instead of five separate tools.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer", "default": 30}},
         },
     },
     {
@@ -449,9 +460,24 @@ class McpServer:
         self.store = store
         self._health = health
         self.can_publish = can_publish
+        self._local = threading.local()
+
+    @property
+    def caller(self) -> str:
+        return getattr(self._local, "caller", "human")
+
+    def _human_only(self, action: str) -> None:
+        """An agent token may draft; it may never approve, schedule or publish.
+
+        Enforced here rather than in the prompt: the same server serves the UI (human) and
+        PicoClaw (agent), and only the token tells them apart.
+        """
+        if self.caller == "agent":
+            raise McpError(-32003, f"{action} is human-only: use the CRM UI")
 
     # -- JSON-RPC ----------------------------------------------------------
-    def handle(self, request: dict):
+    def handle(self, request: dict, caller: str = "human"):
+        self._local.caller = caller
         method = request.get("method")
         params = request.get("params") or {}
         req_id = request.get("id")
@@ -553,9 +579,12 @@ class McpServer:
         if not args.get("id"):
             raise McpError(-32602, "id is required")
         fields = {k: args[k] for k in ("name", "body") if args.get(k) is not None}
-        if self.can_publish and args.get("status"):
-            fields["status"] = args["status"]
-        elif args.get("status") not in (None, "", "draft", "scheduled"):
+        requested = args.get("status")
+        if requested in ("scheduled", "published") and self.caller == "agent":
+            self._human_only("scheduling or publishing")
+        if self.can_publish and requested:
+            fields["status"] = requested
+        elif requested not in (None, "", "draft"):
             raise PermissionError("publishing status needs human approval in the UI")
         if not fields:
             raise McpError(-32602, "nothing to update")
@@ -563,6 +592,7 @@ class McpServer:
                                             allowed_statuses=None if self.can_publish else ("draft",))
 
     def _tool_content_schedule(self, args: dict) -> dict:
+        self._human_only("scheduling")
         if not args.get("id") or not args.get("at"):
             raise McpError(-32602, "id and at are required")
         from service import to_epoch
@@ -605,6 +635,46 @@ class McpServer:
     def _edge(self):
         from edge import from_config  # local import keeps mcp usable without a config
         return from_config(self.cfg) if self.cfg else None
+
+    def _tool_crm_editorial_brief(self, args: dict) -> dict:
+        days = max(7, min(180, int(args.get("days") or 30)))
+        insights = self.crm.content_insights(days)
+        total = insights.get("total") or {}
+        posts = int(insights.get("posts") or 0)
+        views = int(total.get("views") or 0)
+        reactions = int(total.get("reactions") or 0)
+        growth = self.crm.channel_growth(30)
+        gaps = self.crm.content_gaps(max(days, 60)).get("opportunities") or []
+        slots = self.crm.posting_times(90).get("best") or []
+        plan = self.crm.get_plan() or {}
+        brand = self.crm.get_brand()
+        return {
+            "window_days": days,
+            "channel": {
+                "posts": posts,
+                "views": views,
+                "avg_views": round(views / posts, 1) if posts else 0,
+                "engagement_pct": round(reactions / views * 100, 2) if views else 0,
+                "cadence_per_week": insights.get("cadence_per_week"),
+                "subscribers": growth.get("subscribers_now"),
+                "subscribers_delta_30d": growth.get("subscribers_delta"),
+            },
+            "types": {kind: {"posts": row.get("posts"), "avg_views": row.get("avg_views")}
+                      for kind, row in (insights.get("by_type") or {}).items()},
+            "best_slots": [{"when": f"{slot.get('weekday')} {int(slot.get('hour') or 0):02d}:00",
+                            "avg_views": slot.get("avg_views"), "posts": slot.get("posts")}
+                           for slot in slots[:3]],
+            "opportunities": [{"theme": gap.get("term"), "avg_views": gap.get("avg_views"),
+                               "posts": gap.get("posts")} for gap in gaps[:4]],
+            "angles": [{"id": row["id"], "title": (row["title"] or "")[:120],
+                        "angle": (row.get("angle") or "")[:160]}
+                       for row in self.crm.list_angles("new", 5)],
+            "plan": {"week": plan.get("week_start"), "status": plan.get("status"),
+                     "items": len(plan.get("items") or [])},
+            "brand": {"tone": brand.get("tone"), "donts": brand.get("donts"),
+                      "limits": brand.get("limits")},
+            "note": ("عينة صغيرة: اقرأ الأرقام كمؤشر لا حكم" if posts < 20 else ""),
+        }
 
     def _tool_crm_radar_scan(self, args: dict) -> dict:
         from radar import scan as radar_scan
@@ -703,6 +773,7 @@ class McpServer:
         return plan or {"plan": None}
 
     def _tool_crm_approve_plan(self, args: dict) -> dict:
+        self._human_only("plan approval")
         plan_id = args.get("plan_id") or ""
         if not plan_id:
             raise McpError(-32602, "plan_id is required")
