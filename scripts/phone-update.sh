@@ -26,11 +26,21 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 say "downloading $REPO@$BRANCH"
-# codeload caches tarballs for a few minutes; without the cache-buster an update can
-# silently re-install the previous commit (observed: a fix "deployed" but not present).
-curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
-  "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH?cb=$(date +%s)" \
-  -o "$tmp/src.tgz" || die "download failed (is the repo public?)"
+# codeload caches the branch tarball for minutes and QUERY STRINGS DO NOT DEFEAT IT — a fix was
+# "deployed" twice while the previous commit stayed installed. Resolve the branch to a commit SHA
+# and download that immutable archive instead; the branch URL is only a fallback.
+sha="$(curl -fsSL "https://api.github.com/repos/$REPO/commits/$BRANCH" 2>/dev/null \
+  | sed -n 's/.*"sha": "\([0-9a-f]\{40\}\)".*/\1/p' | head -1)"
+if [ -n "$sha" ]; then
+  say "commit ${sha:0:7}"
+  curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$sha" -o "$tmp/src.tgz" \
+    || die "download failed for $sha"
+else
+  say "commit unknown (API rate limit?) — falling back to the branch tarball"
+  curl -fsSL -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+    "https://codeload.github.com/$REPO/tar.gz/refs/heads/$BRANCH?cb=$(date +%s)" \
+    -o "$tmp/src.tgz" || die "download failed (is the repo public?)"
+fi
 say "archive $(wc -c <"$tmp/src.tgz" | tr -d ' ') bytes, sha $(sha256sum "$tmp/src.tgz" | cut -c1-12)"
 tar xzf "$tmp/src.tgz" -C "$tmp"
 src="$(find "$tmp" -maxdepth 1 -type d -name '*-*' | head -1)"
