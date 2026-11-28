@@ -1104,32 +1104,87 @@ def edge_page(state: dict) -> bytes:
     return page("التشغيل", body, "today")
 
 
-def brand_page(brand: dict) -> bytes:
+def brand_page(brand: dict, notice: str = "") -> bytes:
     palette = brand.get("palette") or {}
-    swatches = "".join(
-        f'<span style="display:inline-flex;align-items:center;gap:6px;margin:4px 8px 4px 0">'
-        f'<span style="width:20px;height:20px;border-radius:6px;background:{esc(v)};'
-        f'border:1px solid #444"></span><code>{esc(k)} {esc(v)}</code></span>'
-        for k, v in palette.items())
-    dos = "".join(f"<li>{esc(x)}</li>" for x in brand.get("dos") or [])
-    donts = "".join(f"<li>{esc(x)}</li>" for x in brand.get("donts") or [])
-    limits = brand.get("limits") or {}
     fonts = brand.get("fonts") or {}
+    limits = brand.get("limits") or {}
+    visual = brand.get("visual") or {}
+    logo = visual.get("logo") or {}
+    formats = visual.get("formats") or {}
+    text_rules = visual.get("text_on_image") or {}
+    version = brand.get("version") or 0
+    updated = fmt_ts(brand.get("updated_at")) if brand.get("updated_at") else "لم يُحدَّث بعد"
+
+    swatch_rows = "".join(
+        f'<div class="row" style="gap:8px;align-items:center;margin:6px 0">'
+        f'<input type="color" name="palette_{esc(name)}" value="{esc(value)}" '
+        f'style="width:44px;height:44px;border:none;background:none;padding:0" aria-label="{esc(name)}">'
+        f'<span style="flex:1">{esc(name)}</span>'
+        f'<code dir="ltr">{esc(value)}</code>'
+        f'</div>'
+        for name, value in palette.items())
+
     body = f"""
 <h1>هوية القناة</h1>
-<p class="muted">{esc(brand.get("tagline") or "حدّد شعارًا ونبرة ثم اطلب من الوكيل الالتزام بها.")}</p>
-<h2>الألوان</h2><div class="card">{swatches or "—"}</div>
-<h2>الخطوط</h2><div class="card">{esc(fonts.get("display"))} · {esc(fonts.get("body"))}</div>
-<h2>النبرة</h2><div class="card">{esc(brand.get("tone") or "—")}</div>
-<h2>افعل</h2><ul>{dos}</ul>
-<h2>لا تفعل</h2><ul>{donts}</ul>
-<h2>حدود القناة</h2>
-<div class="grid">
-  <div class="stat"><b>{esc(limits.get("max_chars"))}</b><span>حرفًا للمنشور</span></div>
-  <div class="stat"><b>{esc(limits.get("media_mb"))}</b><span>ميغابايت للوسائط</span></div>
-  <div class="stat"><b>{esc(limits.get("per_day"))}</b><span>منشورًا يوميًا</span></div>
-  <div class="stat"><b>{"لا" if limits.get("polls") is False else "نعم"}</b><span>استبيانات</span></div>
-</div>
+<p class="muted">نسخة <b>{esc(version)}</b> · آخر تحديث {esc(updated)} — كل تعديل هنا يصل فورًا
+إلى الوكيل عبر <code>crm_get_brand</code> و<code>crm_visual_brief</code>.</p>
+{f'<div class="card" style="border-color:#C5A059"><b>{esc(notice)}</b></div>' if notice else ''}
+<form method="post" action="/ui/brand/save">
+  <h2>التعريف</h2>
+  <div class="card">
+    <label>الاسم<input name="name" value="{esc(brand.get("name") or "")}" maxlength="80"></label>
+    <label>الشعار النصي<input name="tagline" value="{esc(brand.get("tagline") or "")}" maxlength="120"></label>
+    <label>النبرة<textarea name="tone" rows="3" maxlength="400">{esc(brand.get("tone") or "")}</textarea></label>
+  </div>
+
+  <h2>الألوان</h2>
+  <div class="card">{swatch_rows or '<p class="muted">لا ألوان محددة.</p>'}</div>
+
+  <h2>الخطوط والمقاسات</h2>
+  <div class="card">
+    <label>خط العناوين<input name="font_display" value="{esc(fonts.get("display") or "")}" maxlength="40"></label>
+    <label>خط النص<input name="font_body" value="{esc(fonts.get("body") or "")}" maxlength="40"></label>
+    <label>مقاس الصورة<input name="format_image" value="{esc(formats.get("image") or "")}" dir="ltr" maxlength="12"></label>
+    <label>مقاس الفيديو<input name="format_video" value="{esc(formats.get("video") or "")}" dir="ltr" maxlength="12"></label>
+  </div>
+
+  <h2>افعل / لا تفعل</h2>
+  <div class="card">
+    <label>افعل (سطر لكل قاعدة)<textarea name="dos" rows="5">{(chr(10)).join(brand.get("dos") or [])}</textarea></label>
+    <label>لا تفعل (سطر لكل قاعدة)<textarea name="donts" rows="5">{(chr(10)).join(brand.get("donts") or [])}</textarea></label>
+    <label>ممنوع في المواد البصرية (سطر لكل عنصر)
+      <textarea name="visual_never" rows="4">{(chr(10)).join(logo.get("never") or [])}</textarea></label>
+  </div>
+
+  <h2>سياسة الشعار</h2>
+  <div class="card">
+    <label>الوضع
+      <select name="logo_mode">
+        <option value="official_icon" {'selected' if logo.get('mode') == 'official_icon' else ''}>أيقونة الجهة الرسمية فقط</option>
+        <option value="text_name_only" {'selected' if logo.get('mode') == 'text_name_only' else ''}>اسم الجهة نصًّا فقط</option>
+      </select>
+    </label>
+    <label>إن غابت الأيقونة
+      <select name="logo_fallback">
+        <option value="text_name" {'selected' if logo.get('fallback') == 'text_name' else ''}>اكتب الاسم الرسمي</option>
+        <option value="none" {'selected' if logo.get('fallback') == 'none' else ''}>بلا بديل</option>
+      </select>
+    </label>
+    <p class="muted">لا شعارات شخصية ولا أحرف مفردة ولا توقيعات — هذا محفور في الخادم ولا يُعدَّل من هنا.</p>
+  </div>
+
+  <h2>حدود القناة والنص على الصورة</h2>
+  <div class="card">
+    <label>أقصى طول للمنشور<input type="number" name="limit_chars" value="{esc(limits.get("max_chars"))}" min="200" max="4096"></label>
+    <label>أقصى حجم للوسائط (MB)<input type="number" name="limit_media_mb" value="{esc(limits.get("media_mb"))}" min="1" max="20"></label>
+    <label>أقصى منشورات يوميًا<input type="number" name="limit_per_day" value="{esc(limits.get("per_day"))}" min="1" max="30"></label>
+    <label>أقصى كلمات على الصورة<input type="number" name="text_max_words" value="{esc(text_rules.get("max_words"))}" min="1" max="30"></label>
+    <label>أدنى تباين<input type="number" step="0.1" name="text_contrast" value="{esc(text_rules.get("contrast_min"))}" min="3" max="21"></label>
+  </div>
+
+  <div class="row" style="margin:14px 0"><button>حفظ الهوية</button>
+  <a class="chip" href="/ui/radar">الزوايا</a></div>
+</form>
 """
     return page("الهوية", body, "channel")
 

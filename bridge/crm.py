@@ -788,6 +788,16 @@ class CrmClient:
         "donts": ["بلا شعارات أو أسماء شخصية", "بلا مبالغات أو وعود مطلقة",
                   "بلا نسخ حرفي من منشور سابق", "بلا استبيانات (غير مدعومة في القنوات)"],
         "limits": {"max_chars": 1024, "media_mb": 20, "per_day": 30, "polls": False},
+        # Visual rules are machine-readable so no agent can invent a look "close enough".
+        "visual": {
+            "logo": {"mode": "official_icon", "fallback": "text_name",
+                     "never": ["شعار شخصي", "مونوغرام", "توقيع", "أحرف مفردة", "ختم"]},
+            "text_on_image": {"max_words": 7, "position": "top", "contrast_min": 4.5},
+            "formats": {"image": "1080x1080", "video": "1080x1920", "story": "1080x1920"},
+            "palette_roles": {"background": "deep", "text": "beige", "accent": "gold"},
+        },
+        "version": 1,
+        "updated_at": 0,
     }
 
     def get_brand(self) -> dict:
@@ -804,12 +814,55 @@ class CrmClient:
     def set_brand(self, patch: dict) -> dict:
         current = self.get_brand()
         for key, value in (patch or {}).items():
+            if key in ("version", "updated_at"):
+                continue
             if isinstance(value, dict) and isinstance(current.get(key), dict):
                 current[key] = {**current[key], **value}
             else:
                 current[key] = value
+        current["version"] = int(self.get_brand().get("version") or 0) + 1
+        current["updated_at"] = int(time.time())
         self.store.set_meta("brand", json.dumps(current, ensure_ascii=False))
         return current
+
+    def visual_spec(self, kind: str = "image", topic: str = "") -> dict:
+        """Everything a visual asset must obey, resolved to concrete values.
+
+        Deterministic on purpose: the agent gets hex codes, a format and a refusal list instead of
+        adjectives, so "the brand" cannot drift into whatever the model finds attractive today.
+        """
+        brand = self.get_brand()
+        visual = brand.get("visual") or {}
+        palette = brand.get("palette") or {}
+        roles = visual.get("palette_roles") or {}
+        fonts = brand.get("fonts") or {}
+        formats = visual.get("formats") or {}
+        logo = visual.get("logo") or {}
+        text_rules = visual.get("text_on_image") or {}
+        resolved = {}
+        for role in ("background", "text", "accent"):
+            name = roles.get(role)
+            resolved[role] = palette.get(name) or palette.get(role) or ""
+        never = list(dict.fromkeys((logo.get("never") or []) + (brand.get("donts") or [])))
+        return {
+            "version": brand.get("version"),
+            "topic": topic,
+            "kind": kind,
+            "format": formats.get(kind) or formats.get("image") or "1080x1080",
+            "colors": resolved,
+            "palette": palette,
+            "fonts": fonts,
+            "logo": {"mode": logo.get("mode"), "fallback": logo.get("fallback")},
+            "text_on_image": text_rules,
+            "never": never,
+            "rules": [
+                "لا شعار ولا حرف ولا توقيع من صنع الوكيل؛ أيقونة الجهة الرسمية فقط.",
+                "إن غابت الأيقونة الرسمية: اسم الجهة الرسمي نصًّا — بلا اختراع شعار.",
+                f"خلفية {resolved.get('background')} · نص {resolved.get('text')} · لمسة {resolved.get('accent')}.",
+                f"حدود النص على الصورة: {text_rules.get('max_words', 7)} كلمات بحد أقصى.",
+                f"المقاس {formats.get(kind) or formats.get('image') or '1080x1080'}.",
+            ],
+        }
 
     # -- growth, variants, daily snapshot ----------------------------------
     def snapshot_channel_day(self, day: str | None = None) -> dict:
@@ -982,6 +1035,33 @@ class CrmClient:
         if kind in self.MEDIA_EXTS and not post.get("media_path"):
             issues.append({"code": "media_missing", "severity": "error",
                            "message": f"منشور {kind} بلا ملف — أرفق الوسائط أولًا"})
+        if kind in self.MEDIA_EXTS:
+            try:
+                meta = json.loads(post.get("meta") or "{}")
+            except ValueError:
+                meta = {}
+            brief = meta.get("visual_brief")
+            if not brief:
+                issues.append({"code": "visual_brief_missing", "severity": "warning",
+                               "message": "منشور وسائط بلا مواصفات بصرية — استخدم crm_visual_brief"})
+            else:
+                spec = self.visual_spec(kind)
+                # Scan only the descriptive fields: `never` and `rules` legitimately name the
+                # forbidden things, and reading them as violations made every correct brief fail.
+                scan = brief if isinstance(brief, dict) else {}
+                scan = {key: value for key, value in scan.items()
+                        if key not in ("never", "rules", "palette")}
+                blob = json.dumps(scan, ensure_ascii=False)
+                hits = [term for term in spec.get("never") or [] if term and term in blob]
+                if hits:
+                    issues.append({"code": "brand_violation", "severity": "warning",
+                                   "message": "المواصفات تخالف الهوية: " + "، ".join(hits[:3])})
+                allowed = {str(v).upper() for v in (spec.get("palette") or {}).values() if v}
+                used = {color.upper() for color in re.findall(r"#[0-9A-Fa-f]{6}", blob)}
+                off = sorted(used - allowed)
+                if off:
+                    issues.append({"code": "off_palette", "severity": "warning",
+                                   "message": "ألوان خارج اللوحة: " + "، ".join(off[:3])})
         if post.get("status") in ("scheduled", "publishing") and post.get("scheduled_at"):
             window = 1800
             clash = self._one(

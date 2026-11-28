@@ -212,6 +212,17 @@ TOOLS = [
         },
     },
     {
+        "name": "crm_visual_brief",
+        "description": "The exact visual rules for a media post: format, background/text/accent hex, "
+                       "fonts, logo policy and the never-list. Call this before creating any image, "
+                       "video or audio post and pass the result back as visual_brief.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"kind": {"type": "string", "enum": ["image", "video", "audio", "story"]},
+                           "topic": {"type": "string"}},
+        },
+    },
+    {
         "name": "crm_editorial_brief",
         "description": "One compact briefing for planning: channel numbers, best slots, content "
                        "gaps, radar angles, current plan state and the brand limits. Call this "
@@ -567,13 +578,21 @@ class McpServer:
     def _tool_crm_create_channel_post(self, args: dict) -> dict:
         if not args.get("channelJid"):
             raise McpError(-32602, "channelJid is required")
-        return self.crm.create_channel_post({
+        fields = {
             "channel_jid": args["channelJid"],
             "title": args.get("name") or "",
             "body": args.get("body") or "",
             "status": "draft",
             "created_by": args.get("created_by") or "agent",
-        })
+        }
+        if args.get("media_type"):
+            fields["media_type"] = args["media_type"]
+        brief = args.get("visual_brief")
+        if brief:
+            if not isinstance(brief, dict):
+                raise McpError(-32602, "visual_brief must be an object from crm_visual_brief")
+            fields["meta"] = json.dumps({"visual_brief": brief}, ensure_ascii=False)
+        return self.crm.create_channel_post(fields)
 
     def _tool_crm_update_channel_post(self, args: dict) -> dict:
         if not args.get("id"):
@@ -636,6 +655,12 @@ class McpServer:
         from edge import from_config  # local import keeps mcp usable without a config
         return from_config(self.cfg) if self.cfg else None
 
+    def _tool_crm_visual_brief(self, args: dict) -> dict:
+        kind = (args.get("kind") or "image").lower()
+        if kind not in ("image", "video", "audio", "story"):
+            kind = "image"
+        return self.crm.visual_spec(kind, (args.get("topic") or "")[:120])
+
     def _tool_crm_editorial_brief(self, args: dict) -> dict:
         days = max(7, min(180, int(args.get("days") or 30)))
         insights = self.crm.content_insights(days)
@@ -671,8 +696,9 @@ class McpServer:
                        for row in self.crm.list_angles("new", 5)],
             "plan": {"week": plan.get("week_start"), "status": plan.get("status"),
                      "items": len(plan.get("items") or [])},
-            "brand": {"tone": brand.get("tone"), "donts": brand.get("donts"),
-                      "limits": brand.get("limits")},
+            "brand": {"version": brand.get("version"), "tone": brand.get("tone"),
+                      "donts": brand.get("donts"), "limits": brand.get("limits"),
+                      "visual": brand.get("visual")},
             "note": ("عينة صغيرة: اقرأ الأرقام كمؤشر لا حكم" if posts < 20 else ""),
         }
 

@@ -497,7 +497,10 @@ class Handler(BaseHTTPRequestHandler):
                 f"آخر مسح: {ui.fmt_ts(last)}" if last else "لم يُمسح بعد",
                 notice))
         if path == "/ui/brand":
-            return self._send_html(200, ui.brand_page(crm.get_brand()))
+            notice = {"saved": "حُفظت الهوية — الوكيل سيرى النسخة الجديدة فورًا.",
+                      "invalid": "قيمة غير صالحة: تحقق من الألوان والمقاسات.",
+                      "nothing": "لا تغييرات للحفظ."}.get((query.get("ok") or [""])[0], "")
+            return self._send_html(200, ui.brand_page(crm.get_brand(), notice))
         if path == "/ui/edge":
             state = {"enabled": False}
             try:
@@ -880,6 +883,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/ui/channel/refresh":
             self.bridge.refresh_channel_info()
             return self._redirect("/ui/channel")
+        if path == "/ui/brand/save":
+            patch_data, problem = _brand_patch(form)
+            if problem:
+                return self._redirect(f"/ui/brand?ok={problem}")
+            if not patch_data:
+                return self._redirect("/ui/brand?ok=nothing")
+            crm.set_brand(patch_data)
+            return self._redirect("/ui/brand?ok=saved")
         if path == "/ui/radar/scan":
             from radar import scan as radar_scan
             try:
@@ -914,6 +925,102 @@ class Handler(BaseHTTPRequestHandler):
                 crm.complete_activity(form["id"])
             return self._redirect("/ui")
         return self._send(404, {"error": "not found"})
+
+
+HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}$")
+FORMAT = re.compile(r"^[0-9]{3,4}x[0-9]{3,4}$")
+
+
+def _lines(value: str | None, cap: int = 12, length: int = 140) -> list[str]:
+    return [row.strip()[:length] for row in (value or "").splitlines() if row.strip()][:cap]
+
+
+def _number(value, default: int, low: int, high: int) -> int:
+    try:
+        return max(low, min(high, int(str(value).strip())))
+    except (TypeError, ValueError):
+        return default
+
+
+def _brand_patch(form: dict) -> tuple[dict, str]:
+    """Validate what the owner typed. Returns (patch, problem-code); problem != '' means reject."""
+    current_limits = {"max_chars": 1024, "media_mb": 20, "per_day": 30}
+    patch: dict = {}
+    palette = {}
+    for key in ("deep", "sage", "gold", "beige"):
+        raw = (form.get(f"palette_{key}") or "").strip()
+        if not raw:
+            continue
+        if not HEX_COLOR.match(raw):
+            return {}, "invalid"
+        palette[key] = raw.upper()
+    if palette:
+        patch["palette"] = palette
+
+    name = (form.get("name") or "").strip()[:80]
+    tagline = (form.get("tagline") or "").strip()[:120]
+    tone = (form.get("tone") or "").strip()[:400]
+    if name or tagline or tone:
+        patch.update({k: v for k, v in (("name", name), ("tagline", tagline), ("tone", tone)) if v})
+
+    fonts = {"display": (form.get("font_display") or "").strip()[:40],
+             "body": (form.get("font_body") or "").strip()[:40]}
+    fonts = {k: v for k, v in fonts.items() if v}
+    if fonts:
+        patch["fonts"] = fonts
+
+    dos, donts = _lines(form.get("dos")), _lines(form.get("donts"))
+    if dos:
+        patch["dos"] = dos
+    if donts:
+        patch["donts"] = donts
+
+    formats = {}
+    for kind in ("image", "video"):
+        raw = (form.get(f"format_{kind}") or "").strip()
+        if not raw:
+            continue
+        if not FORMAT.match(raw):
+            return {}, "invalid"
+        formats[kind] = raw
+    visual = {}
+    if formats:
+        visual["formats"] = formats
+    mode = (form.get("logo_mode") or "").strip()
+    fallback = (form.get("logo_fallback") or "").strip()
+    logo = {}
+    if mode in ("official_icon", "text_name_only"):
+        logo["mode"] = mode
+    if fallback in ("text_name", "none"):
+        logo["fallback"] = fallback
+    never = _lines(form.get("visual_never"))
+    if never:
+        logo["never"] = never
+    if logo:
+        visual["logo"] = logo
+    text_rules = {}
+    if form.get("text_max_words"):
+        text_rules["max_words"] = _number(form["text_max_words"], 7, 1, 30)
+    if form.get("text_contrast"):
+        try:
+            text_rules["contrast_min"] = max(3.0, min(21.0, float(form["text_contrast"])))
+        except ValueError:
+            return {}, "invalid"
+    if text_rules:
+        visual["text_on_image"] = text_rules
+    if visual:
+        patch["visual"] = visual
+
+    limits = {}
+    if form.get("limit_chars"):
+        limits["max_chars"] = _number(form["limit_chars"], current_limits["max_chars"], 200, 4096)
+    if form.get("limit_media_mb"):
+        limits["media_mb"] = _number(form["limit_media_mb"], current_limits["media_mb"], 1, 20)
+    if form.get("limit_per_day"):
+        limits["per_day"] = _number(form["limit_per_day"], current_limits["per_day"], 1, 30)
+    if limits:
+        patch["limits"] = limits
+    return patch, ""
 
 
 def make_server(cfg: Config, bridge: Bridge) -> ThreadingHTTPServer:
