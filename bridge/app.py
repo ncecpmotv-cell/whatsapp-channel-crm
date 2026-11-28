@@ -630,7 +630,7 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 return self._send(400, {"jsonrpc": "2.0", "id": None,
                                         "error": {"code": -32600, "message": "Invalid Request"}})
-            result = self.mcp.handle(payload)
+            result = self.mcp.handle(payload, caller=caller)
             if result is None:
                 return self._send_no_content(202)
             return self._send(200, result, headers)
