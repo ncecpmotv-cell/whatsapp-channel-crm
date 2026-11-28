@@ -94,7 +94,7 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.
 
-## مهارات الوكيل (7) — v4.4.0
+## مهارات الوكيل (27) — v4.15.0
 
 `content-strategist` · `channel-brand` · `editorial-board` · `reply-desk` · `hook-lab` ·
 `repurpose` · `publish-runbook` — كلها في `~/pico/skills` و`~/pico/workspace/skills`.

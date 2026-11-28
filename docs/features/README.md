@@ -31,6 +31,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0023](0023-editorial-board-and-agent-guard.md) | Editorial board (two phases) + human-only agent gate | shipped | R-32 |
 | [0024](0024-editable-identity-and-visual-spec.md) | Editable identity + `crm_visual_brief` enforcement | shipped | R-33 |
 | [0025](0025-fast-agent-playbooks.md) | Four fast playbooks + `crm_inbox` / `crm_post_pack` | shipped | R-34 |
+| [0026](0026-skill-library-ten-waves.md) | Skill library: 10 waves, 27 skills, 4 MCP servers | shipped | R-35 |
 
 ## Adding one
 

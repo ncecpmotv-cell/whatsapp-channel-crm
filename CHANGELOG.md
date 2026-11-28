@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.15.0] — 2026-11-28
+
+### Added — the skill library (waves v4.5.0 → v4.14.0)
+
+20 new Arabic playbooks on top of the existing 7 (27 total), each bounded to one model call —
+or zero: `insight-interpreter`, `audience-persona`, `title-formulas`, `carousel-builder`,
+`distribution-plan`, `crosspost-adapter`, `launch-calendar`, `series-planner`, `weekly-review`,
+`retention-audit`, `ab-designer`, `offer-builder`, `fact-check-lite`, `source-log`,
+`community-prompts`, `collab-pitch`, `voice-desk`, `incident-comms`, `skill-router`,
+`metrics-glossary`.
+
+- `skill-router` maps any request to one skill, so 27 playbooks do not collide in the prompt.
+- `metrics-glossary` fixes interpretation: views are opens, reactions are not comments, one data
+  point is not a trend.
+- Two verified free remote MCP servers added: `cloudflare_docs` and `deepwiki` (four total with
+  `crm` and `edge`). Search/extract MCPs were refused — they duplicate `tools.web` and the edge
+  worker and cost context on every turn.
+- `crm_update_channel_post` now merges `meta` instead of replacing it, so writing `sources` cannot
+  wipe `visual_brief`.
+
 ## [4.4.0] — 2026-11-28
 
 ### Added
