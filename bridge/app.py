@@ -458,7 +458,8 @@ class Handler(BaseHTTPRequestHandler):
                 unread=crm.unread_count(), metrics=crm.channel_metrics(7),
                 plan=crm.get_plan()))
         if path == "/ui/plan":
-            return self._send_html(200, ui.plan_page(crm.get_plan()))
+            drafts = {p["id"] for p in crm.list_posts("draft", 200)}
+            return self._send_html(200, ui.plan_page(crm.get_plan(), draft_ids=drafts))
         if path == "/ui/notifications":
             return self._send_html(200, ui.notifications_page(crm.notifications(60)))
         if path == "/ui/content":

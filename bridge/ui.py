@@ -619,7 +619,7 @@ PLAN_KIND_AR = {"text": "نص", "image": "صورة", "video": "فيديو", "aud
 PLAN_GOAL_AR = {"awareness": "وعي", "engagement": "تفاعل", "conversion": "تحويل"}
 
 
-def plan_page(plan: dict | None, notice: str = "") -> bytes:
+def plan_page(plan: dict | None, notice: str = "", draft_ids: set | None = None) -> bytes:
     if not plan:
         body = ("<h1>خطة الأسبوع</h1>"
                 '<p class="muted">لا خطة بعد — اطلب من الوكيل «خطة الأسبوع القادم».</p>')
@@ -629,8 +629,9 @@ def plan_page(plan: dict | None, notice: str = "") -> bytes:
         post = item.get("post_id")
         if post:
             link = f'<a class="muted" href="/ui/post/{esc(post)}">فتح المسودة ←</a>'
-            if item.get("kind") in ("image", "video", "audio", "file"):
-                link += '<span class="muted"> · أرفق الوسائط ثم أعد الجدولة</span>'
+            waiting = draft_ids is None or post in draft_ids
+            if waiting and item.get("kind") in ("image", "video", "audio", "file"):
+                link += '<span class="muted"> · بانتظار الوسائط</span>'
         else:
             link = '<span class="muted">لم تُنشأ بعد</span>'
         slot = fmt_ts(item.get("slot_at")) if item.get("slot_at") else "بلا وقت"
