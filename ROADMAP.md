@@ -94,6 +94,7 @@ types and proposed times, all in `draft`.
 | R-31 | Trend radar (edge cron) + reporting board on `/ui` | v4.1.0 | [0022](docs/features/0022-radar-and-reporting-board.md) |
 | R-32 | Editorial board + `AGENT_TOKEN` human-only gate | v4.2.0 | [0023](docs/features/0023-editorial-board-and-agent-guard.md) |
 | R-33 | Identity editable in the UI + machine-readable visual spec | v4.3.0 | [0024](docs/features/0024-editable-identity-and-visual-spec.md) |
+| R-34 | Fast playbooks: reply-desk · hook-lab · repurpose · publish-runbook | v4.4.0 | [0025](docs/features/0025-fast-agent-playbooks.md) |
 
 ---
 

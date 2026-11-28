@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] — 2026-11-28
+
+### Added
+
+- **`crm_inbox`**: unread DMs with contact name, phone, org and stage in one query.
+- **`crm_post_pack`**: one post with metrics, lint, plan slot, brand version, visual brief and the
+  closest archived posts — 40 MCP tools.
+- **Four skills**: `reply-desk` (classify + draft in one call, send only on an explicit word),
+  `hook-lab` (8 hooks, local scoring, top 3), `repurpose` (one post → text series + 30s video +
+  45s audio), `publish-runbook` (zero-model pre-flight and a one-line post-publish read).
+
 ## [4.3.0] — 2026-11-28
 
 ### Added

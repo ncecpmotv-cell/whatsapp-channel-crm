@@ -1,5 +1,4 @@
 """Fast context tools: the inbox query and the single-post pack."""
-import json
 import os
 import sys
 import tempfile
