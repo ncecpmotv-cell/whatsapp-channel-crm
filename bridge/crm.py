@@ -1248,6 +1248,55 @@ class CrmClient:
                 "skipped": skipped, "needs_media": needs_media}
 
     # -- topic intelligence (local, no model) -------------------------------
+    # -- inbox & post pack (fast context for the agent) ---------------------
+    def inbox(self, limit: int = 12, unread_only: bool = True) -> list[dict]:
+        """Inbound DMs with just enough contact context to answer, in one query."""
+        where = "WHERE m.direction = 'in'" + (" AND m.read = 0" if unread_only else "")
+        rows = self._all(
+            "SELECT m.id, m.body, m.media_type, m.at, m.read, m.contact_id, "
+            "       c.name AS contact_name, c.phone, c.org, c.stage "
+            "FROM crm_messages m LEFT JOIN crm_contacts c ON c.id = m.contact_id "
+            f"{where} ORDER BY m.at DESC LIMIT ?", (max(1, min(50, limit)),))
+        for row in rows:
+            row["body"] = (row.get("body") or "")[:400]
+        return rows
+
+    def post_pack(self, post_id: str) -> dict:
+        """Everything needed to rewrite or measure one post, without five round trips."""
+        post = self.get_channel_post(post_id)
+        if not post:
+            raise ValueError("المنشور غير موجود")
+        similar = []
+        tokens = (post.get("title") or "") + " " + (post.get("body") or "")[:120]
+        if tokens.strip():
+            similar = [{"id": row["id"], "title": (row.get("title") or "")[:80],
+                        "views": row.get("views"), "score": row.get("score")}
+                       for row in self.semantic_search(tokens, 4).get("results", [])
+                       if row["id"] != post_id]
+        brief = None
+        try:
+            import json as _json
+            brief = (_json.loads(post.get("meta") or "{}") or {}).get("visual_brief")
+        except ValueError:
+            brief = None
+        item = self._one("SELECT slot_at, goal FROM crm_plan_items WHERE post_id = ?", (post_id,))
+        return {
+            "id": post["id"],
+            "title": post.get("title"),
+            "body": post.get("body"),
+            "status": post.get("status"),
+            "kind": post.get("media_type"),
+            "views": post.get("views") or 0,
+            "forwards": post.get("forwards") or 0,
+            "reactions": post.get("reactions") or 0,
+            "published_at": post.get("published_at"),
+            "brand_version": self.get_brand().get("version"),
+            "visual_brief": brief,
+            "plan": dict(item) if item else None,
+            "lint": self.lint_post(post_id)["issues"],
+            "similar": similar,
+        }
+
     # -- radar angles -------------------------------------------------------
     def add_angle(self, item: dict) -> dict | None:
         """Insert unless the URL is already known. Returns the stored row or None."""

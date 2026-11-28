@@ -212,6 +212,23 @@ TOOLS = [
         },
     },
     {
+        "name": "crm_inbox",
+        "description": "Unread inbound DMs with contact name, phone and stage — one call instead of "
+                       "searching contacts and messages separately.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"limit": {"type": "integer", "default": 12},
+                           "all": {"type": "boolean", "default": False}},
+        },
+    },
+    {
+        "name": "crm_post_pack",
+        "description": "One post with everything needed to rewrite or measure it: body, metrics, "
+                       "lint issues, plan slot, visual brief and the closest archived posts.",
+        "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}},
+                        "required": ["id"]},
+    },
+    {
         "name": "crm_visual_brief",
         "description": "The exact visual rules for a media post: format, background/text/accent hex, "
                        "fonts, logo policy and the never-list. Call this before creating any image, "
@@ -654,6 +671,15 @@ class McpServer:
     def _edge(self):
         from edge import from_config  # local import keeps mcp usable without a config
         return from_config(self.cfg) if self.cfg else None
+
+    def _tool_crm_inbox(self, args: dict) -> dict:
+        rows = self.crm.inbox(int(args.get("limit") or 12), unread_only=not args.get("all"))
+        return {"count": len(rows), "messages": rows}
+
+    def _tool_crm_post_pack(self, args: dict) -> dict:
+        if not args.get("id"):
+            raise McpError(-32602, "id is required")
+        return self.crm.post_pack(args["id"])
 
     def _tool_crm_visual_brief(self, args: dict) -> dict:
         kind = (args.get("kind") or "image").lower()
