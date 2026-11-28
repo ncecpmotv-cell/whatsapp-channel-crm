@@ -467,6 +467,13 @@ def capabilities_page(data: dict) -> bytes:
     runs = data.get("runs") or []
     cost = data.get("cost") or {}
 
+    models = data.get("models") or {}
+    model_rows = "".join(
+        f'<div class="row"><span>{esc(item.get("name") or "")}</span>'
+        f'<span class="muted">{esc(item.get("model") or "")}</span>'
+        f'<span class="badge {"scheduled" if item.get("name") == models.get("current") else "draft"}">'
+        f'{"الحالي" if item.get("name") == models.get("current") else "بديل"}</span></div>'
+        for item in (models.get("list") or [])) or '<p class="muted">لا نماذج.</p>'
     skill_chips = "".join(f'<span class="chip">{esc(name)}</span>'
                           for name in (skills.get("names") or [])) or '<span class="muted">—</span>'
     mcp_rows = "".join(
@@ -495,6 +502,7 @@ def capabilities_page(data: dict) -> bytes:
   <div class="stat"><b>{esc(len(cron))}</b><span>مهمة مجدولة</span></div>
 </div>
 <h2>المهارات</h2><div class="card">{skill_chips}</div>
+<h2>النماذج</h2><div class="card">{model_rows}</div>
 <h2>سيرفرات MCP</h2><div class="card">{mcp_rows}</div>
 <h2>المهام المجدولة</h2><div class="card">{cron_rows}</div>
 <h2>بوابات المنع</h2><div class="card"><ul>{guard_rows}</ul></div>

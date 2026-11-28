@@ -177,9 +177,14 @@ def capabilities(crm, picoclaw_home: str = "", tools_count: int = 0) -> dict:
     jobs = [{"name": job.get("name"), "schedule": (job.get("schedule") or {}).get("expr"),
              "enabled": job.get("enabled")}
             for job in (cron_file.get("jobs") or [])]
+    models = [{"name": entry.get("model_name"), "model": entry.get("model"),
+               "base": entry.get("api_base"), "enabled": entry.get("enabled", True)}
+              for entry in (config.get("model_list") or [])]
+    current = ((config.get("agents") or {}).get("defaults") or {}).get("model_name")
     return {
         "skills": {"count": len(skills), "names": skills},
         "tools": {"count": tools_count},
+        "models": {"current": current, "list": models},
         "mcp": servers,
         "cron": jobs,
         "guards": GUARDS,

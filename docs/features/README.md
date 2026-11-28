@@ -33,6 +33,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0025](0025-fast-agent-playbooks.md) | Four fast playbooks + `crm_inbox` / `crm_post_pack` | shipped | R-34 |
 | [0026](0026-skill-library-ten-waves.md) | Skill library: 10 waves, 27 skills, 4 MCP servers | shipped | R-35 |
 | [0027](0027-orchestration-layer.md) | Orchestration layer: one idea → execution pack + strategy skills | shipped | R-36 |
+| [0028](0028-free-models-and-fallback.md) | Free models + measured fallback + token discipline | shipped | R-37 |
 
 ## Adding one
 

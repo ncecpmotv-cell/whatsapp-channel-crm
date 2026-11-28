@@ -97,6 +97,7 @@ types and proposed times, all in `draft`.
 | R-34 | Fast playbooks: reply-desk · hook-lab · repurpose · publish-runbook | v4.4.0 | [0025](docs/features/0025-fast-agent-playbooks.md) |
 | R-35 | Skill library (10 waves, 27 skills) + free remote MCP servers | v4.15.0 | [0026](docs/features/0026-skill-library-ten-waves.md) |
 | R-36 | Orchestration layer + strategy skills + capabilities page | v4.16.0 | [0027](docs/features/0027-orchestration-layer.md) |
+| R-37 | Two free models with a one-command fallback + token knobs | v4.17.0 | [0028](docs/features/0028-free-models-and-fallback.md) |
 
 ---
 

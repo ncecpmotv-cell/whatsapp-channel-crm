@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.17.0] — 2026-11-28
+
+### Added
+
+- **Two free models with a measured fallback**: `default` (Ollama Cloud · deepseek-v4.1-flash,
+  5.4 s per tool turn) and `fallback` (OpenRouter free · ernie-5.5-flash, 7.3 s). Switch with
+  `picoclaw model fallback`.
+- **Token knobs** tuned for free tiers: `max_tool_iterations` 50→16, `max_tokens` 32768→8192,
+  summarize threshold 20→12 and 75%→60%.
+- **`/ui/capabilities`** now lists the models and marks the current one.
+
+### Notes
+
+- The second Ollama Cloud key returned `Add usage credits or subscribe` and was **not** installed;
+  the working key is the one already on the device.
+- `nvidia/nemotron-3.5-lightning:free` was rejected: it does not emit `tool_calls`.
+
 ## [4.16.0] — 2026-11-28
 
 ### Added
