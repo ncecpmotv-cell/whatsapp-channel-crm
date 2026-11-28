@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.16.0] — 2026-11-28
+
+### Added
+
+- **`crm_orchestrate`**: one idea in → intent (7 modes), compact numbers, angles, skill order,
+  exact next tool calls, guards and a call budget. Deterministic; no model call.
+- **`crm_capabilities`** + **`/ui/capabilities`**: skills, MCP servers, cron jobs, guards, last runs
+  and cost caps in one screen.
+- **`crm_runs`** table: every orchestrated request is recorded with its mode and step count.
+- **Strategy skills**: `strategic-plan` (90-day arc), `strategic-analysis` (double-down/stop/
+  experiment), `visibility-plan` (three discovery channels), `orchestrator` (the entry rule).
+- `skill-router` and `editorial-board` now begin with `crm_orchestrate`, so the older playbooks are
+  the second step of a routed flow instead of separate islands.
+- **`context7`** MCP added (5 servers total); daily `orchestrator` cron at 07:30.
+- `docs/MODELS.md`: free-tier models (Ollama Cloud, OpenRouter `:free`) and the seven token rules.
+
 ## [4.15.0] — 2026-11-28
 
 ### Added — the skill library (waves v4.5.0 → v4.14.0)

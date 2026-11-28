@@ -96,6 +96,7 @@ types and proposed times, all in `draft`.
 | R-33 | Identity editable in the UI + machine-readable visual spec | v4.3.0 | [0024](docs/features/0024-editable-identity-and-visual-spec.md) |
 | R-34 | Fast playbooks: reply-desk · hook-lab · repurpose · publish-runbook | v4.4.0 | [0025](docs/features/0025-fast-agent-playbooks.md) |
 | R-35 | Skill library (10 waves, 27 skills) + free remote MCP servers | v4.15.0 | [0026](docs/features/0026-skill-library-ten-waves.md) |
+| R-36 | Orchestration layer + strategy skills + capabilities page | v4.16.0 | [0027](docs/features/0027-orchestration-layer.md) |
 
 ---
 

@@ -94,6 +94,15 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.
 
+## التنسيق والقدرات (v4.16.0)
+
+- `crm_orchestrate` نداء واحد يرجع: النية (7 أوضاع) · الأرقام · الزوايا · ترتيب المهارات ·
+  الخطوات التالية · الحرّاس · ميزانية الاستدعاءات. محفوظ في `crm_runs`.
+- `crm_capabilities` + `/ui/capabilities`: المهارات · سيرفرات MCP · الكرون · الحرّاس · آخر تشغيلات.
+- كرون: `orchestrator` يوميًا 07:30 (موجز ٥ أسطر) · `editorial-board` اثنين 10:00.
+- MCP: `crm` · `edge` · `cloudflare_docs` · `deepwiki` · `context7` (خمسة، السقف العملي).
+- النماذج المجانية وإنضباط التوكنز: `docs/MODELS.md`.
+
 ## مهارات الوكيل (27) — v4.15.0
 
 `content-strategist` · `channel-brand` · `editorial-board` · `reply-desk` · `hook-lab` ·
