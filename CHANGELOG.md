@@ -21,8 +21,7 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - Approving a plan no longer schedules media posts that have no file. Image/video/audio/file
-  items become drafts, are reported in `needs_media`, and the plan page says
-  «أرفق الوسائط ثم أعد الجدولة». Found by the agent during the first real approval: two
+  items become drafts, are reported in  `needs_media`, and the plan page says «بانتظار الوسائط» until a file is attached. Found by the agent during the first real approval: two
   scheduled items would have failed at publish time.
 
 ## [3.6.0] — 2026-11-27
