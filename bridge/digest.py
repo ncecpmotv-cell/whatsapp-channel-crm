@@ -61,6 +61,64 @@ def should_send(now: float, last_sent: float | None, weekday: int = 6, hour: int
     return True
 
 
+def build_daily_brief(crm) -> str:
+    """What is happening today: scheduled, blocked drafts, failures, plan state."""
+    now = time.time()
+    offset = getattr(crm, "tz_offset", 3)
+    local = dt.datetime.utcfromtimestamp(now) + dt.timedelta(hours=offset)
+    start = int(local.replace(hour=0, minute=0, second=0, microsecond=0)
+                .replace(tzinfo=dt.UTC).timestamp()) - offset * 3600
+    end = start + 86400
+    rows = crm._all(
+        "SELECT title, scheduled_at FROM crm_posts WHERE status='scheduled' "
+        "AND scheduled_at >= ? AND scheduled_at < ? ORDER BY scheduled_at", (start, end))
+    lines = [f"☀️ موجز اليوم — {local.strftime('%Y-%m-%d')}", ""]
+    if rows:
+        lines.append(f"سيُنشر اليوم ({len(rows)}):")
+        for row in rows:
+            when = dt.datetime.utcfromtimestamp(int(row["scheduled_at"])) + dt.timedelta(hours=offset)
+            lines.append(f"• {when.strftime('%H:%M')} — {row['title'] or 'بدون عنوان'}")
+    else:
+        lines.append("لا شيء مجدول اليوم.")
+    waiting = crm._all(
+        "SELECT title, media_type FROM crm_posts WHERE status='draft' "
+        "AND media_type IN ('image','video','audio','file') AND COALESCE(media_path,'') = ''")
+    if waiting:
+        lines.append("")
+        lines.append(f"بانتظار وسائط ({len(waiting)}):")
+        for row in waiting[:3]:
+            lines.append(f"• {row['title'] or 'بدون عنوان'}")
+    failed = crm._one(
+        "SELECT COUNT(*) AS n FROM crm_posts WHERE status='failed' AND updated_at >= ? "
+        "AND COALESCE(last_error,'') NOT LIKE 'أُلغي%'", (now - 86400,))
+    if int((failed or {}).get("n") or 0):
+        lines.append(f"• فشل خلال 24 ساعة: {(failed or {}).get('n')}")
+    plan = crm.get_plan()
+    if plan:
+        state = "معتمدة" if plan.get("status") == "approved" else "مقترحة — تحتاج اعتمادك"
+        lines.append(f"• خطة {plan['week_start']}: {state}")
+    return "\n".join(lines)
+
+
+def maybe_send_daily(crm, cfg, pico_home: str, now: float | None = None) -> bool:
+    now = time.time() if now is None else now
+    hour = int(getattr(cfg, "daily_brief_hour", 9))
+    local = dt.datetime.utcfromtimestamp(now) + dt.timedelta(hours=getattr(cfg, "tz_offset", 3))
+    if local.hour != hour:
+        return False
+    last = crm.store.get_meta("last_daily_brief_at")
+    if last and now - float(last) < 20 * 3600:
+        return False
+    text = build_daily_brief(crm)
+    token, chat = telegram_creds(pico_home)
+    sent = send_telegram(token, chat, text)
+    if not sent:
+        termux_notify("موجز اليوم", text[:200])
+    crm.store.set_meta("last_daily_brief_at", str(int(now)))
+    crm.notify("digest", "موجز اليوم", "أُرسل" if sent else "حُفظ محليًا", "/ui")
+    return True
+
+
 def build_digest(crm, days: int = 7) -> str:
     metrics = crm.channel_metrics(days)
     total = metrics.get("total") or {}
@@ -157,6 +215,8 @@ def start_scheduler(crm, cfg, pico_home: str, interval: int = 300) -> threading.
         while True:
             try:
                 maybe_send(crm, cfg, pico_home)
+                if getattr(cfg, "daily_brief_enabled", False):
+                    maybe_send_daily(crm, cfg, pico_home)
             except Exception as exc:  # a digest must never kill the bridge
                 log.warning("digest loop error: %s", exc)
             time.sleep(interval)

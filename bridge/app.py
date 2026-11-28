@@ -457,6 +457,28 @@ class Handler(BaseHTTPRequestHandler):
                 stats=crm.stats(), scheduled=scheduled, followups=crm.followups(0),
                 unread=crm.unread_count(), metrics=crm.channel_metrics(7),
                 plan=crm.get_plan()))
+        if path == "/ui/search":
+            term = (query.get("q") or [""])[0].strip()
+            results = crm.semantic_search(term, 20)["results"] if term else []
+            return self._send_html(200, ui.search_page(term, results))
+        if path == "/ui/media":
+            files = []
+            usage: dict[str, list[str]] = {}
+            for post in crm._all("SELECT title, media_path FROM crm_posts "
+                                 "WHERE COALESCE(media_path,'') != ''"):
+                usage.setdefault(os.path.basename(post["media_path"]), []).append(
+                    (post["title"] or "")[:24])
+            if os.path.isdir(MEDIA_DIR):
+                for name in sorted(os.listdir(MEDIA_DIR)):
+                    full = os.path.join(MEDIA_DIR, name)
+                    if not os.path.isfile(full):
+                        continue
+                    ext = os.path.splitext(name)[1].lower()
+                    kind = next((k for k, exts in ALLOWED_EXT.items() if ext in exts), "file")
+                    files.append({"name": name, "kind": kind,
+                                  "kb": round(os.path.getsize(full) / 1024),
+                                  "titles": usage.get(name, [])})
+            return self._send_html(200, ui.media_page(files))
         if path == "/ui/plan":
             drafts = {p["id"] for p in crm.list_posts("draft", 200)}
             return self._send_html(200, ui.plan_page(crm.get_plan(), draft_ids=drafts))
@@ -495,7 +517,8 @@ class Handler(BaseHTTPRequestHandler):
             jid = (self.bridge.cfg.newsletter_jids or ("",))[0]
             return self._send_html(200, ui.channel_page(
                 crm.get_channel_info(jid), crm.channel_summary(30),
-                crm.daily_series(14), crm.list_posts("published", 20)))
+                crm.daily_series(14), crm.list_posts("published", 20),
+                growth=crm.channel_growth(90)))
         if path == "/ui/metrics":
             try:
                 days = int((query.get("days") or ["7"])[0] or 7)

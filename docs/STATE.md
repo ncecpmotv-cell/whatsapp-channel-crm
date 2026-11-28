@@ -44,7 +44,9 @@ edge/ (في الريبو)      Worker بلا حالة: edge_web_extract · edge_
 - `/health`: `{"ok":true,"crm":true,"origin_guard":{"public_url":true,"tailnet":true},"push":{"enabled":true}}`
 - **الخطط**: `crm_plans` + `crm_plan_items` · `crm_save_plan` / `crm_get_plan` /
   `crm_approve_plan` · صفحة `/ui/plan` · تقرير أسبوعي تلقائي الأحد 20:00 (thread داخل الجسر).
-- MCP: **24 أداة محلية** (إرفاق وسائط · فحص ما قبل النشر · أفضل وقت) · `content_gaps` (فجوات الموضوعات) و`semantic_search` (BM25 + تجذيع عربي).
+- **العمليات**: نسخ احتياطي يومي 03:00 (مُتحقَّق) · حارس كل 5 دقائق · موجز 09:00 ·
+  خطة أسبوعية استباقية (cron `0 10 * * 4`) · `/ui/search` · `/ui/media` · A/B.
+- MCP: **27 أداة محلية** (إرفاق وسائط · فحص ما قبل النشر · أفضل وقت) · `content_gaps` (فجوات الموضوعات) و`semantic_search` (BM25 + تجذيع عربي).
 - **edge-mcp** منشور على Cloudflare: `https://edge-mcp.fixed-friend.workers.dev` — 3 أدوات
   (extract/search/status)، مسجّل في PicoClaw كخادم MCP ثانٍ. مُتحقَّق من الجوال عبر الوكيل:
   استخراج example.com (172 حرفًا) + `content_gaps` في نفس الدور.

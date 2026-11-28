@@ -192,6 +192,38 @@ TOOLS = [
         },
     },
     {
+        "name": "channel_growth",
+        "description": "Subscriber and view history per day, with the delta over the window.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 90}},
+        },
+    },
+    {
+        "name": "crm_create_variant",
+        "description": "Create an A/B sibling draft of a post (max 3 variants). Both are normal "
+                       "posts with their own metrics.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "post_id": {"type": "string"},
+                "title": {"type": "string"},
+                "body": {"type": "string"},
+                "label": {"type": "string", "description": "B, C …"},
+            },
+            "required": ["post_id"],
+        },
+    },
+    {
+        "name": "crm_variant_results",
+        "description": "Compare a post with its variants by views and name the current winner.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"post_id": {"type": "string"}},
+            "required": ["post_id"],
+        },
+    },
+    {
         "name": "crm_attach_media",
         "description": "Attach a local file (the path PicoClaw downloaded for a Telegram photo/"
                        "video) to a post. Schedules it at the plan slot when one exists.",
@@ -498,6 +530,18 @@ class McpServer:
             items=args.get("items") or [],
             title=args.get("title") or "",
             notes=args.get("notes") or "")
+
+    def _tool_channel_growth(self, args: dict) -> dict:
+        return self.crm.channel_growth(int(args.get("days") or 90))
+
+    def _tool_crm_create_variant(self, args: dict) -> dict:
+        if not args.get("post_id"):
+            raise McpError(-32602, "post_id is required")
+        return self.crm.create_variant(args["post_id"], title=args.get("title"),
+                                       body=args.get("body"), label=args.get("label"))
+
+    def _tool_crm_variant_results(self, args: dict) -> dict:
+        return self.crm.variant_results(args.get("post_id") or "")
 
     def _tool_crm_attach_media(self, args: dict) -> dict:
         if not args.get("post_id") or not args.get("path"):

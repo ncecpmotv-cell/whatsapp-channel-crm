@@ -21,6 +21,9 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0013](0013-edge-mcp.md) | edge-mcp: cloud tools that keep the phone light | shipped* | R-22 |
 | [0014](0014-weekly-plan-and-digest.md) | Weekly plan object, one-tap approval, Sunday digest | shipped | R-23 |
 | [0015](0015-media-lint-slot.md) | Media from Telegram, pre-publish lint, best slot | shipped | R-24 |
+| [0016](0016-backups-and-watchdog.md) | Verified backups, watchdog alerts | shipped | R-25 |
+| [0017](0017-growth-brief-proactive.md) | Growth history, daily brief, proactive plan | shipped | R-26 |
+| [0018](0018-search-media-variants.md) | Search page, media library, A/B variants | shipped | R-27 |
 
 ## Adding one
 

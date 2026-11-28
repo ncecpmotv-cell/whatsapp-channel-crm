@@ -153,6 +153,13 @@ CREATE TABLE IF NOT EXISTS crm_plan_items (
     post_id  TEXT
 );
 CREATE INDEX IF NOT EXISTS crm_plan_items_plan ON crm_plan_items(plan_id, position);
+CREATE TABLE IF NOT EXISTS crm_channel_daily (
+    day         TEXT PRIMARY KEY,
+    subscribers INTEGER,
+    posts       INTEGER NOT NULL DEFAULT 0,
+    views       INTEGER NOT NULL DEFAULT 0,
+    captured_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS crm_channel_info (
     jid         TEXT PRIMARY KEY,
     name        TEXT,
@@ -254,6 +261,8 @@ class CrmClient:
             columns = {row[1] for row in self._conn.execute("PRAGMA table_info(crm_posts)")}
             if "meta" not in columns:
                 self._conn.execute("ALTER TABLE crm_posts ADD COLUMN meta TEXT")
+            if "variant_of" not in columns:
+                self._conn.execute("ALTER TABLE crm_posts ADD COLUMN variant_of TEXT")
             self._conn.commit()
 
     # ------------------------------------------------------------------
@@ -753,6 +762,75 @@ class CrmClient:
         ranked.sort(key=lambda x: (-x["avg_views"], -x["posts"]))
         return {"days": days, "tz_offset": offset, "buckets": len(ranked),
                 "best": ranked[:8], "worst": ranked[-3:] if len(ranked) > 3 else []}
+
+    # -- growth, variants, daily snapshot ----------------------------------
+    def snapshot_channel_day(self, day: str | None = None) -> dict:
+        """One row per local day: subscribers + that day's posts/views. Idempotent."""
+        offset = self.tz_offset
+        if day:
+            local_day = str(day)[:10]
+        else:
+            local_day = (dt.datetime.utcfromtimestamp(_now()) + dt.timedelta(hours=offset)).strftime("%Y-%m-%d")
+        info = self._one("SELECT subscribers FROM crm_channel_info ORDER BY fetched_at DESC LIMIT 1")
+        subscribers = (info or {}).get("subscribers")
+        day_start = int(dt.datetime.strptime(local_day, "%Y-%m-%d")
+                        .replace(tzinfo=dt.UTC).timestamp()) - offset * 3600
+        row = self._one(
+            "SELECT COUNT(*) AS posts, COALESCE(SUM(views),0) AS views FROM crm_posts "
+            "WHERE status='published' AND published_at >= ? AND published_at < ?",
+            (day_start, day_start + 86400))
+        self._exec(
+            "INSERT INTO crm_channel_daily (day, subscribers, posts, views, captured_at) "
+            "VALUES (?,?,?,?,?) ON CONFLICT(day) DO UPDATE SET "
+            "subscribers=COALESCE(excluded.subscribers, crm_channel_daily.subscribers), "
+            "posts=excluded.posts, views=excluded.views, captured_at=excluded.captured_at",
+            (local_day, subscribers, int((row or {}).get("posts") or 0),
+             int((row or {}).get("views") or 0), _now()))
+        return {"day": local_day, "subscribers": subscribers,
+                "posts": int((row or {}).get("posts") or 0), "views": int((row or {}).get("views") or 0)}
+
+    def channel_growth(self, days: int = 90) -> dict:
+        rows = self._all("SELECT * FROM crm_channel_daily ORDER BY day DESC LIMIT ?",
+                         (max(2, min(365, days)),))
+        rows = list(reversed(rows))
+        subs = [(r["day"], r["subscribers"]) for r in rows if r["subscribers"] is not None]
+        delta = (subs[-1][1] - subs[0][1]) if len(subs) >= 2 else 0
+        return {"days": days, "points": len(rows), "series": rows,
+                "subscribers_now": subs[-1][1] if subs else None,
+                "subscribers_delta": delta,
+                "views_total": sum(int(r["views"] or 0) for r in rows),
+                "note": "نقطة واحدة يوميًا؛ المنحنى يتحسن بعد أسبوع" if len(rows) < 7 else ""}
+
+    def create_variant(self, post_id: str, title: str | None = None,
+                       body: str | None = None, label: str | None = None) -> dict:
+        """A sibling draft for A/B testing; both are normal posts with their own metrics."""
+        parent = self.get_channel_post(post_id)
+        if not parent:
+            raise ValueError("المنشور غير موجود")
+        existing = self._all("SELECT id, variant_of FROM crm_posts WHERE variant_of = ? OR id = ?",
+                             (post_id, post_id))
+        if len(existing) >= 4:
+            raise ValueError("لا يزيد الاختبار عن 3 نسخ")
+        letter = label or chr(ord("B") + max(0, len(existing) - 1))
+        variant = self.create_channel_post({
+            "channel_jid": parent["channel_jid"],
+            "title": (title or f"{parent['title'] or ''} — نسخة {letter}").strip(),
+            "body": body if body is not None else (parent["body"] or ""),
+            "media_type": parent["media_type"] if parent.get("media_path") else "none",
+            "media_path": parent.get("media_path"),
+            "created_by": parent.get("created_by") or "human",
+        })
+        self._exec("UPDATE crm_posts SET variant_of = ? WHERE id = ?", (post_id, variant["id"]))
+        return self.get_channel_post(variant["id"]) or {}
+
+    def variant_results(self, post_id: str) -> dict:
+        rows = self._all(
+            "SELECT id, title, status, views, forwards, reactions, variant_of FROM crm_posts "
+            "WHERE id = ? OR variant_of = ? ORDER BY views DESC", (post_id, post_id))
+        published = [r for r in rows if r["status"] == "published"]
+        winner = published[0]["id"] if published else None
+        return {"post_id": post_id, "variants": rows, "winner": winner,
+                "note": "الاختبار يحتاج 48 ساعة قبل الحكم" if len(published) < 2 else ""}
 
     # -- media, lint, best slot --------------------------------------------
     def _image_size(self, data: bytes) -> tuple[int, int] | None:

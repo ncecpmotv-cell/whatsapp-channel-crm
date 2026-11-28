@@ -580,6 +580,7 @@ def content_page(posts: list[dict], status: str = "", error: str = "",
                    '<a role="button" href="#newContent" data-composer>إنشاء محتوى</a></div>')
     body = f"""
 <h1>المحتوى</h1>
+<div class="row" style="justify-content:flex-end"><a class="chip" href="/ui/search">بحث في المحتوى</a></div>
 {banner}
 <div class="chips" role="navigation" aria-label="تصفية حسب الحالة">{filters}</div>
 <details class="panel" id="newContent">
@@ -927,7 +928,7 @@ def post_page(post: dict, history: list[dict], channel: dict | None, notice: str
 
 # --------------------------------------------------------------------- channel
 def channel_page(info: dict | None, summary: dict, series: list[dict],
-                 posts: list[dict]) -> bytes:
+                 posts: list[dict], growth: dict | None = None) -> bytes:
     name = (info or {}).get("name") or "قناة واتساب (لم تُقرأ بعد)"
     subs = (info or {}).get("subscribers")
     invite = (info or {}).get("invite") or ""
@@ -939,6 +940,15 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
         f'<span class="muted">{fmt_ts(p.get("published_at"))}</span></div>'
         f'<span class="muted">👁 {esc(p["views"] or 0)} · ↪ {esc(p["forwards"] or 0)} · ♥ {esc(p["reactions"] or 0)}</span>'
         f'</div></div>' for p in summary.get("top", [])) or '<p class="muted">لا منشورات منشورة بعد.</p>'
+    growth_html = ""
+    if growth:
+        delta = int(growth.get("subscribers_delta") or 0)
+        now_subs = growth.get("subscribers_now")
+        growth_html = (
+            f'<div class="card"><div class="row"><div class="stack">'
+            f'<b>{"+" if delta >= 0 else ""}{delta} مشترك</b>'
+            f'<span class="muted">التغير خلال {growth.get("points")} يومًا · '
+            f'الآن: {now_subs if now_subs is not None else "—"}</span></div></div></div>')
     best = summary.get("best")
     best_html = ""
     if best:
@@ -963,6 +973,8 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
   <div class="stat"><b>{esc(fetched)}</b><span>آخر قراءة من واتساب</span></div>
 </div>
 <div class="card"><span class="muted">رابط الدعوة: </span>{invite_html}</div>
+{growth_html}
+<div class="row" style="justify-content:flex-end"><a class="chip" href="/ui/media">مكتبة الوسائط</a></div>
 {best_html}
 <h2>التفاعل اليومي</h2>
 <div class="card">{_bars(series, "views")}</div>
@@ -975,6 +987,48 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 
 
 # ----------------------------------------------------------------- notifications
+def search_page(query: str, results: list[dict]) -> bytes:
+    rows = "".join(
+        f'<a class="card" href="/ui/post/{esc(r["id"])}">'
+        f'<div class="row"><div class="stack" style="flex:1"><b>{esc(r["title"] or "بدون عنوان")}</b>'
+        f'<span class="muted">{esc(r["status"])} · {esc(r.get("type") or "")} · '
+        f'{r.get("views", 0)} مشاهدة</span>'
+        f'<span class="muted">{esc(r.get("snippet") or "")}</span></div>'
+        f'<span class="badge">{r.get("score", 0)}</span></div></a>'
+        for r in results)
+    body = f"""
+<h1>البحث في المحتوى</h1>
+<form method="get" action="/ui/search" class="row" style="gap:8px">
+  <input name="q" value="{esc(query)}" placeholder="كلمتان أو أكثر" aria-label="بحث">
+  <button>ابحث</button>
+</form>
+{rows or ('<p class="muted">لا نتائج.</p>' if query else '<p class="muted">اكتب كلمة للبحث في كل المنشورات.</p>')}
+"""
+    return page("البحث", body, "content")
+
+
+def media_page(files: list[dict]) -> bytes:
+    cards = []
+    for f in files:
+        name = f["name"]
+        if f["kind"] == "image":
+            preview = (f'<img src="/ui/media/{esc(name)}" alt="" width="64" height="64" '
+                       f'loading="lazy" decoding="async">')
+        else:
+            preview = '<span class="badge">' + esc(f["kind"]) + "</span>"
+        used = ", ".join(f.get("titles") or []) or "غير مستخدم"
+        cards.append(
+            f'<div class="card"><div class="row"><div class="stack" style="flex:1">'
+            f'<b>{esc(name)}</b><span class="muted">{f["kb"]}KB · {esc(used)[:60]}</span></div>'
+            f'{preview}</div></div>')
+    body = f"""
+<h1>مكتبة الوسائط</h1>
+<p class="muted">{len(files)} ملفًا في مجلد الوسائط.</p>
+{''.join(cards) or '<p class="muted">لا وسائط بعد.</p>'}
+"""
+    return page("الوسائط", body, "channel")
+
+
 def notifications_page(items: list[dict]) -> bytes:
     cards = []
     for n in items:

@@ -60,6 +60,15 @@ class Config:
     digest_hour: int = 20
     picoclaw_home: str = "~/pico"
     media_dir: str = ""
+    # operations: backups, watchdog, daily brief
+    backup_enabled: bool = True
+    backup_hour: int = 3
+    backup_keep: int = 7
+    backup_dir: str = "~/crm/var/backups"
+    watchdog_enabled: bool = True
+    watchdog_interval: int = 300
+    daily_brief_enabled: bool = True
+    daily_brief_hour: int = 9
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -117,6 +126,14 @@ class Config:
             digest_hour=get_int("DIGEST_HOUR", 20),
             picoclaw_home=os.path.expanduser(get("PICOCLAW_HOME") or "~/pico"),
             media_dir=os.path.expanduser(get("MEDIA_DIR") or "~/crm/var/media"),
+            backup_enabled=get_bool("BACKUP_ENABLED", True),
+            backup_hour=get_int("BACKUP_HOUR", 3),
+            backup_keep=get_int("BACKUP_KEEP", 7),
+            backup_dir=os.path.expanduser(get("BACKUP_DIR") or "~/crm/var/backups"),
+            watchdog_enabled=get_bool("WATCHDOG_ENABLED", True),
+            watchdog_interval=get_int("WATCHDOG_INTERVAL", 300),
+            daily_brief_enabled=get_bool("DAILY_BRIEF_ENABLED", True),
+            daily_brief_hour=get_int("DAILY_BRIEF_HOUR", 9),
         )
         cfg.validate()
         return cfg
@@ -141,4 +158,6 @@ _KNOWN_KEYS = {
     "APP_TZ_OFFSET", "PUBLIC_BASE_URL", "TRUSTED_ORIGINS", "ALLOW_TAILNET_DOMAIN",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PUSH_EVENTS",
     "DIGEST_ENABLED", "DIGEST_WEEKDAY", "DIGEST_HOUR", "PICOCLAW_HOME", "MEDIA_DIR",
+    "BACKUP_ENABLED", "BACKUP_HOUR", "BACKUP_KEEP", "BACKUP_DIR",
+    "WATCHDOG_ENABLED", "WATCHDOG_INTERVAL", "DAILY_BRIEF_ENABLED", "DAILY_BRIEF_HOUR",
 }

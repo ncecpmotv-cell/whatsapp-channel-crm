@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.8.0] — 2026-11-27
+
+### Added
+
+- **Verified backups**: daily 03:00 archive (DB via sqlite backup + media), integrity-checked
+  and row-counted on creation, rotated by mtime, with an offline `restore()` that clears stale
+  WAL files.
+- **Watchdog** every 5 minutes: WhatsApp logged out/unreachable, ≥3 failed publishes in 24 h,
+  disk below 500 MB — deduplicated per hour, to bell + push.
+- **Growth history**: `crm_channel_daily` snapshot + `channel_growth`, shown as «+N مشترك»
+  on the channel page.
+- **Daily brief** at 09:00: today's posts, drafts waiting for media, failures, plan state.
+- **Proactive weekly plan**: PicoClaw cron `0 10 * * 4` analyses and saves a proposed plan;
+  approval stays human.
+- **`/ui/search`** over BM25, **`/ui/media`** library with usage, and **A/B variants**
+  (`crm_create_variant`, `crm_variant_results`).
+
 ## [3.7.0] — 2026-11-27
 
 ### Added

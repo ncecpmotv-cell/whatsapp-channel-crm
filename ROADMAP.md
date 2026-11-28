@@ -85,6 +85,9 @@ types and proposed times, all in `draft`.
 | R-22 | `edge-mcp` Worker: extract + search over MCP | v3.5.0 | [0013](docs/features/0013-edge-mcp.md) |
 | R-23 | Weekly plan object + approval + Sunday digest | v3.6.0 | [0014](docs/features/0014-weekly-plan-and-digest.md) |
 | R-24 | Attach media, lint before publishing, best slot | v3.7.0 | [0015](docs/features/0015-media-lint-slot.md) |
+| R-25 | Verified backups + watchdog | v3.8.0 | [0016](docs/features/0016-backups-and-watchdog.md) |
+| R-26 | Growth history, daily brief, proactive plan | v3.8.0 | [0017](docs/features/0017-growth-brief-proactive.md) |
+| R-27 | Search page, media library, A/B variants | v3.8.0 | [0018](docs/features/0018-search-media-variants.md) |
 
 ---
 

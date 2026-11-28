@@ -109,6 +109,12 @@ class Bridge:
         threading.Thread(target=self._outbox_loop, daemon=True, name="outbox").start()
         threading.Thread(target=self._poll_loop, daemon=True, name="poller").start()
         threading.Thread(target=self._channel_sync_loop, daemon=True, name="channelsync").start()
+        if getattr(self.cfg, "watchdog_enabled", True):
+            try:
+                import watchdog
+                watchdog.start(self.crm, self.gowa, self.cfg)
+            except Exception as exc:
+                log.warning("watchdog not started: %s", exc)
         if getattr(self.cfg, "digest_enabled", True):
             try:
                 from digest import start_scheduler
