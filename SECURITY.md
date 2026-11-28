@@ -8,6 +8,14 @@ Include: affected endpoint or file, a reproduction (curl or a short script), the
 
 Expect an acknowledgement within 72 hours. Fixes are released as a patch commit on `main` with a `CHANGELOG` entry; you will be credited unless you ask otherwise.
 
+## Two tokens, two levels of trust (v4.2.0)
+
+`BRIDGE_TOKEN` is the owner's token: the UI's Basic password and the token a human MCP client
+uses. `AGENT_TOKEN` is what PicoClaw carries. The MCP server compares the presented bearer with
+both, marks the request `agent` or `human`, and refuses (`-32003`) `crm_approve_plan`,
+`content_schedule` and any update that would set `scheduled`/`published` when the caller is an
+agent. Leave `AGENT_TOKEN` empty only on a machine with no agent connected — the gate is inert.
+
 ## Threat model
 
 The intended deployment is a personal instance:

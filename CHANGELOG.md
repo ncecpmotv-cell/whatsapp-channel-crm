@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] — 2026-11-28
+
+### Added
+
+- **Editorial board** (`picoclaw/skills/editorial-board`): four roles in one session, two phases —
+  propose a plan (no bodies), then write drafts only after the owner approves. Measured live:
+  plan `0eeb5710478f`, three items, `proposed`.
+- **`crm_editorial_brief`**: one compact briefing (numbers, slots, gaps, angles, plan, brand)
+  instead of five calls — 37 tools.
+- **`AGENT_TOKEN`**: a second bearer token so the server can tell PicoClaw from the owner.
+
+### Fixed
+
+- **Approval bypass**: `crm_approve_plan`, `content_schedule` and `status: scheduled|published`
+  updates now return `-32003 human-only` for agent tokens. The single-payload MCP path had to be
+  fixed too — it forwarded no caller, so the first version of the guard was inert.
+- **Weekly plan cron** was missing entirely (`cron list → No scheduled jobs`); recreated for
+  Mondays 10:00 with a next run of 2026-11-30.
+- **PicoClaw pointed at the retired preview worker**; its MCP «edge» server now uses
+  `edge-mcp.ncecpmo.workers.dev` and the current token.
+- **Skills unreadable to the agent**: `read_file` is workspace-restricted, so global skills are now
+  also copied to `$PICOCLAW_HOME/workspace/skills`.
+- **Update staleness, again**: codeload ignores query-string cache-busters on branch tarballs;
+  `phone-update.sh` now resolves `main` to a commit SHA and downloads that immutable archive.
+
 ## [4.1.0] — 2026-11-28
 
 ### Added

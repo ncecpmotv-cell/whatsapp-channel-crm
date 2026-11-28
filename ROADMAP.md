@@ -92,6 +92,7 @@ types and proposed times, all in `draft`.
 | R-29 | Brand kit as data + agent guardrails | v4.0.0 | [0020](docs/features/0020-brand-kit.md) |
 | R-30 | Cost guardrails: hard caps, `/usage`, list-based retention | v4.0.2 | [0021](docs/features/0021-cost-guardrails.md) |
 | R-31 | Trend radar (edge cron) + reporting board on `/ui` | v4.1.0 | [0022](docs/features/0022-radar-and-reporting-board.md) |
+| R-32 | Editorial board + `AGENT_TOKEN` human-only gate | v4.2.0 | [0023](docs/features/0023-editorial-board-and-agent-guard.md) |
 
 ---
 
