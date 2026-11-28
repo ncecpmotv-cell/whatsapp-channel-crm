@@ -212,6 +212,27 @@ TOOLS = [
         },
     },
     {
+        "name": "crm_orchestrate",
+        "description": "Give it one idea about the channel and it returns a token-bounded execution "
+                       "pack: the numbers, the angles already found, the skill order, the exact next "
+                       "tool calls and the guards. Call this FIRST for any 'here is my idea' request "
+                       "instead of collecting context yourself.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"idea": {"type": "string"},
+                           "mode": {"type": "string",
+                                    "enum": ["plan", "write", "analyze", "visibility", "launch",
+                                             "distribute", "reply"]}},
+            "required": ["idea"],
+        },
+    },
+    {
+        "name": "crm_capabilities",
+        "description": "What the agent can use right now: skills installed, MCP servers, cron jobs, "
+                       "guards, cost caps and the last orchestration runs.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "crm_inbox",
         "description": "Unread inbound DMs with contact name, phone and stage — one call instead of "
                        "searching contacts and messages separately.",
@@ -680,6 +701,15 @@ class McpServer:
     def _edge(self):
         from edge import from_config  # local import keeps mcp usable without a config
         return from_config(self.cfg) if self.cfg else None
+
+    def _tool_crm_orchestrate(self, args: dict) -> dict:
+        import orchestrator
+        return orchestrator.build(self.crm, args.get("idea") or "", args.get("mode"))
+
+    def _tool_crm_capabilities(self, args: dict) -> dict:
+        import orchestrator
+        home = getattr(self.cfg, "picoclaw_home", "") if self.cfg else ""
+        return orchestrator.capabilities(self.crm, home, len(TOOLS))
 
     def _tool_crm_inbox(self, args: dict) -> dict:
         rows = self.crm.inbox(int(args.get("limit") or 12), unread_only=not args.get("all"))

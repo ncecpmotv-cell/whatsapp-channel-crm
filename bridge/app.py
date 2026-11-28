@@ -489,6 +489,12 @@ class Handler(BaseHTTPRequestHandler):
                 stats=stats, scheduled=scheduled, followups=crm.followups(0),
                 unread=crm.unread_count(), metrics=crm.channel_metrics(7),
                 plan=crm.get_plan(), reports=reports))
+        if path == "/ui/capabilities":
+            import orchestrator
+            from mcp import TOOLS as MCP_TOOLS
+            caps = orchestrator.capabilities(crm, getattr(self.bridge.cfg, "picoclaw_home", ""),
+                                             tools_count=len(MCP_TOOLS))
+            return self._send_html(200, ui.capabilities_page(caps))
         if path == "/ui/radar":
             last = crm.store.get_meta("last_radar_scan") or ""
             notice = (query.get("ok") or [""])[0]

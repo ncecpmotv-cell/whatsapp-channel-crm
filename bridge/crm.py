@@ -130,6 +130,15 @@ CREATE TABLE IF NOT EXISTS crm_chat (
     content TEXT NOT NULL,
     at      INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS crm_runs (
+    id TEXT PRIMARY KEY,
+    at INTEGER NOT NULL,
+    mode TEXT NOT NULL DEFAULT '',
+    idea TEXT NOT NULL DEFAULT '',
+    steps INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'proposed'
+);
+CREATE INDEX IF NOT EXISTS crm_runs_at ON crm_runs(at DESC);
 CREATE TABLE IF NOT EXISTS crm_angles (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
@@ -1248,6 +1257,20 @@ class CrmClient:
                 "skipped": skipped, "needs_media": needs_media}
 
     # -- topic intelligence (local, no model) -------------------------------
+    # -- orchestration runs -------------------------------------------------
+    def record_run(self, mode: str, idea: str, steps: int, status: str = "proposed") -> dict:
+        run_id = uuid.uuid4().hex[:12]
+        self._exec("INSERT INTO crm_runs (id, at, mode, idea, steps, status) VALUES (?, ?, ?, ?, ?, ?)",
+                   (run_id, int(time.time()), mode[:20], idea[:200], int(steps), status))
+        row = self._one("SELECT * FROM crm_runs WHERE id = ?", (run_id,))
+        return row or {"id": run_id, "mode": mode, "idea": idea, "steps": steps, "status": status}
+
+    def list_runs(self, limit: int = 10) -> list[dict]:
+        return self._all("SELECT * FROM crm_runs ORDER BY at DESC LIMIT ?", (max(1, min(50, limit)),))
+
+    def latest_run(self) -> dict | None:
+        return self._one("SELECT * FROM crm_runs ORDER BY at DESC LIMIT 1")
+
     # -- inbox & post pack (fast context for the agent) ---------------------
     def inbox(self, limit: int = 12, unread_only: bool = True) -> list[dict]:
         """Inbound DMs with just enough contact context to answer, in one query."""

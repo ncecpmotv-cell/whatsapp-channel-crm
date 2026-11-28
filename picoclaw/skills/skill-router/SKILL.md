@@ -14,7 +14,11 @@ description: يوجّه الطلب إلى المهارة الصحيحة في س�
 |---|---|
 | «وش في الوارد/رد» | reply-desk |
 | «عنوان/هوك» | hook-lab أو title-formulas |
+| «عندي فكرة/أبي…» | **orchestrator** (ثم ما يقترحه) |
 | «خطة أسبوع» | editorial-board |
+| «استراتيجية/٩٠ يوم» | strategic-plan |
+| «حلّل المحتوى» | strategic-analysis |
+| «ظهور/انتشار» | visibility-plan |
 | «فسّر الأرقام» | insight-interpreter |
 | «لمن نكتب» | audience-persona |
 | «كاروسيل/شرائح» | carousel-builder |

@@ -459,6 +459,53 @@ def reports_block(reports: dict | None) -> str:
 """
 
 
+def capabilities_page(data: dict) -> bytes:
+    skills = data.get("skills") or {}
+    mcp = data.get("mcp") or {}
+    cron = data.get("cron") or []
+    guards = data.get("guards") or []
+    runs = data.get("runs") or []
+    cost = data.get("cost") or {}
+
+    skill_chips = "".join(f'<span class="chip">{esc(name)}</span>'
+                          for name in (skills.get("names") or [])) or '<span class="muted">—</span>'
+    mcp_rows = "".join(
+        f'<div class="row"><span>{esc(name)}</span>'
+        f'<span class="muted">{esc(cfg.get("url") or "")}</span>'
+        f'<span class="badge {"scheduled" if cfg.get("enabled") else "failed"}">'
+        f'{"مفعّل" if cfg.get("enabled") else "متوقف"}</span></div>'
+        for name, cfg in mcp.items()) or '<p class="muted">لا سيرفرات.</p>'
+    cron_rows = "".join(
+        f'<div class="row"><span>{esc(job.get("name") or "")}</span>'
+        f'<code dir="ltr">{esc(job.get("schedule") or "")}</code></div>'
+        for job in cron) or '<p class="muted">لا مهام مجدولة.</p>'
+    run_rows = "".join(
+        f'<div class="row"><span>{esc(row.get("mode") or "")}</span>'
+        f'<span class="muted">{esc((row.get("idea") or "")[:60])}</span>'
+        f'<span class="muted">{fmt_ts(row.get("at"))}</span></div>'
+        for row in runs) or '<p class="muted">لا تشغيلات بعد.</p>'
+    guard_rows = "".join(f"<li>{esc(item)}</li>" for item in guards)
+    body = f"""
+<h1>القدرات</h1>
+<p class="muted">ما يستطيع الوكيل استخدامه الآن — ومعه بوابات المنع.</p>
+<div class="grid">
+  <div class="stat"><b>{esc(skills.get("count", 0))}</b><span>مهارة</span></div>
+  <div class="stat"><b>{esc((data.get("tools") or {}).get("count", 0))}</b><span>أداة MCP</span></div>
+  <div class="stat"><b>{esc(len(mcp))}</b><span>سيرفر</span></div>
+  <div class="stat"><b>{esc(len(cron))}</b><span>مهمة مجدولة</span></div>
+</div>
+<h2>المهارات</h2><div class="card">{skill_chips}</div>
+<h2>سيرفرات MCP</h2><div class="card">{mcp_rows}</div>
+<h2>المهام المجدولة</h2><div class="card">{cron_rows}</div>
+<h2>بوابات المنع</h2><div class="card"><ul>{guard_rows}</ul></div>
+<h2>آخر تشغيلات التنسيق</h2><div class="card">{run_rows}</div>
+<h2>سقوف التكلفة</h2>
+<div class="card"><span class="muted">ذكاء يوميًا {esc(cost.get("ai_daily_limit"))} ·
+وسائط {esc(cost.get("media_cap_mb"))}MB · نسخ {esc(cost.get("backup_cap_mb"))}MB</span></div>
+"""
+    return page("القدرات", body, "channel")
+
+
 def radar_page(angles: list[dict], last_scan: str = "", notice: str = "") -> bytes:
     cards = "".join(
         f'<div class="card"><div class="stack"><b>{esc(a.get("title") or "")}</b>'
@@ -1061,6 +1108,7 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 <div class="card"><span class="muted">رابط الدعوة: </span>{invite_html}</div>
 {growth_html}
 <div class="row" style="justify-content:flex-end;gap:6px">
+  <a class="chip" href="/ui/capabilities">القدرات</a>
   <a class="chip" href="/ui/radar">الزوايا</a>
   <a class="chip" href="/ui/brand">الهوية</a>
   <a class="chip" href="/ui/edge">التشغيل</a>
