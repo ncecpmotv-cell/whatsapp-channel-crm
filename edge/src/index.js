@@ -17,8 +17,9 @@ import {
   handleUsage,
   handleHeartbeat, handleStatus, handleTranscribe,
 } from "./ops.js";
+import { handleRadar, handleRadarIngest, handleRadarSummarize } from "./radar.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const MAX_BYTES = 1_500_000;
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -315,7 +316,7 @@ export default {
     if (url.pathname === "/status") return handleStatus(env);
 
     const ops = ["/backup", "/backup/prune", "/heartbeat", "/usage", "/ai/transcribe",
-                 "/ai/caption"];
+                 "/ai/caption", "/radar", "/radar/ingest", "/radar/summarize"];
     if (ops.includes(url.pathname)) {
       if (!authorised(request, env)) return json({ error: "unauthorized" }, 401);
       if (url.pathname === "/backup/prune" && request.method === "POST") {
@@ -329,6 +330,11 @@ export default {
         return handleBackupList(env);
       }
       if (url.pathname === "/usage") return handleUsage(env);
+      if (url.pathname === "/radar" && request.method === "GET") return handleRadar(env);
+      if (url.pathname === "/radar/ingest" && request.method === "POST") return handleRadarIngest(env);
+      if (url.pathname === "/radar/summarize" && request.method === "POST") {
+        return handleRadarSummarize(request, env);
+      }
       if (url.pathname === "/heartbeat" && request.method === "POST") {
         return handleHeartbeat(request, env);
       }
@@ -368,5 +374,12 @@ export default {
     const reply = await handleRpc(payload, env);
     if (!reply) return new Response(null, { status: 202 });
     return json(reply);
+  },
+
+  // Cron: refresh the radar batch. No model call here — the AI budget is spent on demand.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleRadarIngest(env).then((response) => response.text())
+      .then((body) => console.log("radar", body))
+      .catch((error) => console.error("radar failed", error)));
   },
 };

@@ -401,8 +401,93 @@ def badge(status: str) -> str:
 
 
 # ------------------------------------------------------------------ dashboard
+def reports_block(reports: dict | None) -> str:
+    """The board's reporting half: every feature that produces numbers gets a section here."""
+    if not reports:
+        return ""
+    insights = reports.get("insights") or {}
+    total = insights.get("total") or {}
+    posts = int(insights.get("posts") or 0)
+    views = int(total.get("views") or 0)
+    reactions = int(total.get("reactions") or 0)
+    avg_views = round(views / posts, 1) if posts else 0
+    engagement = round((reactions / views) * 100, 2) if views else 0
+    growth = reports.get("growth") or {}
+    delta = growth.get("subscribers_delta")
+    delta_txt = f"{delta:+d}" if isinstance(delta, int) else "—"
+
+    times = "".join(
+        f'<span class="chip">{esc(slot.get("weekday"))} {int(slot.get("hour") or 0):02d}:00'
+        f' · {esc(slot.get("avg_views"))} ({esc(slot.get("posts"))})</span>'
+        for slot in (reports.get("times") or [])[:3]) or '<span class="muted">لا بيانات كافية بعد</span>'
+
+    gaps = "".join(
+        f'<div class="row"><span>{esc(gap.get("term"))}</span>'
+        f'<span class="muted">{esc(gap.get("avg_views"))} مشاهدة · {esc(gap.get("posts"))} منشور</span></div>'
+        for gap in (reports.get("gaps") or [])[:3]) or '<p class="muted">لا فجوات واضحة في هذه المدة.</p>'
+
+    angles = "".join(
+        f'<a class="card" href="/ui/radar"><div class="stack"><b>{esc(a.get("title") or "")[:80]}</b>'
+        f'<span class="muted">{esc(a.get("angle") or a.get("source") or "")[:90]}</span></div></a>'
+        for a in (reports.get("angles") or [])[:3]) or '<p class="muted">لا زوايا جديدة — اضغط «امسح الرادار».</p>'
+
+    ops = reports.get("ops") or {}
+    return f"""
+<h2>مؤشرات الأداء <span class="muted">آخر 30 يومًا</span></h2>
+<div class="grid">
+  <div class="stat"><b>{avg_views}</b><span>متوسط المشاهدات</span></div>
+  <div class="stat"><b>{engagement}%</b><span>معدل التفاعل</span></div>
+  <div class="stat"><b>{esc(insights.get("cadence_per_week", 0))}</b><span>منشور/أسبوع</span></div>
+  <div class="stat"><b>{delta_txt}</b><span>نمو المشتركين</span></div>
+</div>
+<h2>أفضل أوقات النشر</h2>
+<div class="card">{times}</div>
+<h2>فجوات المحتوى — أين الفرصة</h2>
+<div class="card">{gaps}</div>
+<h2>زوايا الرادار <span class="badge draft">{esc(reports.get("angle_count", 0))}</span></h2>
+{angles}
+<div class="row" style="justify-content:flex-end;gap:6px">
+  <a class="chip" href="/ui/radar">كل الزوايا</a>
+</div>
+<h2>الجودة والتشغيل</h2>
+<div class="grid">
+  <div class="stat"><b>{esc(ops.get("failed", 0))}</b><span>إخفاقات 24 ساعة</span></div>
+  <div class="stat"><b>{esc(ops.get("drafts", 0))}</b><span>مسودات</span></div>
+  <div class="stat"><b>{esc(ops.get("backup", "—"))}</b><span>آخر نسخة</span></div>
+  <div class="stat"><b>{esc(ops.get("heartbeat", "—"))}</b><span>آخر نبضة</span></div>
+</div>
+"""
+
+
+def radar_page(angles: list[dict], last_scan: str = "", notice: str = "") -> bytes:
+    cards = "".join(
+        f'<div class="card"><div class="stack"><b>{esc(a.get("title") or "")}</b>'
+        f'<span class="muted">{esc(a.get("angle") or "بلا زاوية مقترحة")}</span>'
+        f'<span class="muted">{esc(a.get("source") or "")} · جِدّة {esc(a.get("novelty"))}'
+        f' · {fmt_ts(a.get("created_at"))}</span></div>'
+        f'<div class="row" style="gap:6px;margin-top:8px">'
+        f'<form method="post" action="/ui/radar/use"><input type="hidden" name="id" value="{esc(a["id"])}">'
+        f'<button>مسودة</button></form>'
+        f'<a class="chip" href="{esc(a.get("url") or "#")}" target="_blank" rel="noopener">المصدر</a>'
+        f'<form method="post" action="/ui/radar/dismiss"><input type="hidden" name="id" value="{esc(a["id"])}">'
+        f'<button class="ghost">تجاهل</button></form></div></div>'
+        for a in angles)
+    body = f"""
+<h1>زوايا الرادار</h1>
+<p class="muted">قُرئت من مصادر مجانية، وقُيّمت مقابل أرشيفك — الزاوية الجديدة هي ما لم تقله بعد.
+{esc(last_scan)}</p>
+<form method="post" action="/ui/radar/scan" class="row" style="gap:8px;margin:10px 0">
+  <button>امسح الرادار الآن</button>
+  <span class="muted">مسح واحد = استدعاء ذكاء واحد (من سقف 40 يوميًا)</span>
+</form>
+{cards or '<p class="muted">لا زوايا جديدة. امسح الرادار أو وسّع المصادر.</p>'}
+"""
+    return page("الزوايا", body, "channel")
+
+
 def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
-              unread: int, metrics: dict, plan: dict | None = None) -> bytes:
+              unread: int, metrics: dict, plan: dict | None = None,
+              reports: dict | None = None) -> bytes:
     def stat(k, v) -> str:
         zero = " zero" if str(v) in ("0", "") else ""
         return f'<div class="stat{zero}"><b>{esc(v)}</b><span>{esc(k)}</span></div>'
@@ -444,7 +529,7 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
             f'<span class="badge {"scheduled" if plan.get("status") == "approved" else "draft"}">{state}</span>'
             f'</div></a>')
     body = f"""
-<h1>لوحة اليوم</h1>
+<h1>لوحة القيادة</h1>
 <div class="grid">{cards}</div>
 {plan_card}
 <h2>أرقام القناة — {esc(total.get("posts", 0))} منشورًا</h2>
@@ -462,6 +547,7 @@ def dashboard(stats: dict, scheduled: list[dict], followups: list[dict],
   <summary>متابعات مستحقة <span class="badge review">{len(followups)}</span></summary>
   <div class="body">{follow_rows}</div>
 </details>
+{reports_block(reports)}
 """
     return page("اليوم", body, "today")
 
@@ -975,6 +1061,7 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 <div class="card"><span class="muted">رابط الدعوة: </span>{invite_html}</div>
 {growth_html}
 <div class="row" style="justify-content:flex-end;gap:6px">
+  <a class="chip" href="/ui/radar">الزوايا</a>
   <a class="chip" href="/ui/brand">الهوية</a>
   <a class="chip" href="/ui/edge">التشغيل</a>
   <a class="chip" href="/ui/media">مكتبة الوسائط</a>

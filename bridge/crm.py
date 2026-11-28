@@ -130,6 +130,20 @@ CREATE TABLE IF NOT EXISTS crm_chat (
     content TEXT NOT NULL,
     at      INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS crm_angles (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL UNIQUE,
+    source TEXT NOT NULL DEFAULT '',
+    angle TEXT NOT NULL DEFAULT '',
+    score REAL NOT NULL DEFAULT 0,
+    novelty REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'new',
+    post_id TEXT,
+    created_at INTEGER NOT NULL,
+    decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS crm_angles_status ON crm_angles(status, created_at DESC);
 CREATE TABLE IF NOT EXISTS crm_plans (
     id          TEXT PRIMARY KEY,
     week_start  TEXT NOT NULL,
@@ -1154,6 +1168,43 @@ class CrmClient:
                 "skipped": skipped, "needs_media": needs_media}
 
     # -- topic intelligence (local, no model) -------------------------------
+    # -- radar angles -------------------------------------------------------
+    def add_angle(self, item: dict) -> dict | None:
+        """Insert unless the URL is already known. Returns the stored row or None."""
+        if not item.get("url") or not item.get("title"):
+            return None
+        existing = self._one("SELECT * FROM crm_angles WHERE url = ?", (item["url"],))
+        if existing:
+            return None
+        angle_id = item.get("id") or uuid.uuid4().hex[:12]
+        self._exec(
+            "INSERT OR IGNORE INTO crm_angles (id, title, url, source, angle, score, novelty,"
+            " status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?)",
+            (angle_id, item["title"][:300], item["url"], item.get("source", "")[:60],
+             (item.get("angle") or "")[:400], float(item.get("score") or 0),
+             float(item.get("novelty") or 0), int(item.get("created_at") or time.time())))
+        return self._one("SELECT * FROM crm_angles WHERE url = ?", (item["url"],))
+
+    def list_angles(self, status: str = "new", limit: int = 20) -> list[dict]:
+        if status:
+            return self._all(
+                "SELECT * FROM crm_angles WHERE status = ? ORDER BY score DESC, created_at DESC"
+                " LIMIT ?", (status, limit))
+        return self._all("SELECT * FROM crm_angles ORDER BY created_at DESC LIMIT ?", (limit,))
+
+    def count_angles(self, status: str = "new") -> int:
+        row = self._one("SELECT COUNT(*) AS n FROM crm_angles WHERE status = ?", (status,))
+        return int(row["n"]) if row else 0
+
+    def angle(self, angle_id: str) -> dict | None:
+        return self._one("SELECT * FROM crm_angles WHERE id = ?", (angle_id,))
+
+    def set_angle_status(self, angle_id: str, status: str, post_id: str | None = None) -> dict | None:
+        self._exec(
+            "UPDATE crm_angles SET status = ?, post_id = COALESCE(?, post_id), decided_at = ?"
+            " WHERE id = ?", (status, post_id, int(time.time()), angle_id))
+        return self.angle(angle_id)
+
     def content_gaps(self, days: int = 90) -> dict:
         """Which topics are under-used (high views, few posts) or saturated.
 

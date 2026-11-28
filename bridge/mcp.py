@@ -211,6 +211,36 @@ TOOLS = [
         },
     },
     {
+        "name": "crm_radar_scan",
+        "description": "Fetch the radar batch and keep the headlines that are new to this channel. "
+                       "Set summarize=true (costs one AI call) to get a suggested Arabic angle.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"summarize": {"type": "boolean", "default": False}},
+        },
+    },
+    {
+        "name": "crm_angles",
+        "description": "List radar angles waiting for a decision (new by default).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"status": {"type": "string", "enum": ["new", "used", "dismissed", "all"],
+                                      "default": "new"}},
+        },
+    },
+    {
+        "name": "crm_angle_use",
+        "description": "Turn an angle into a draft post for the channel (never publishes).",
+        "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}},
+                        "required": ["id"]},
+    },
+    {
+        "name": "crm_angle_dismiss",
+        "description": "Discard an angle so the radar stops showing it.",
+        "inputSchema": {"type": "object", "properties": {"id": {"type": "string"}},
+                        "required": ["id"]},
+    },
+    {
         "name": "crm_get_brand",
         "description": "The channel's brand kit: palette, fonts, tone, do/don't lists and posting "
                        "limits. Read it before writing any copy.",
@@ -575,6 +605,42 @@ class McpServer:
     def _edge(self):
         from edge import from_config  # local import keeps mcp usable without a config
         return from_config(self.cfg) if self.cfg else None
+
+    def _tool_crm_radar_scan(self, args: dict) -> dict:
+        from radar import scan as radar_scan
+        if self.cfg is None:
+            raise McpError(-32000, "config is not available")
+        return radar_scan(self.crm, self.cfg, summarize=bool(args.get("summarize")),
+                          notify=True)
+
+    def _tool_crm_angles(self, args: dict) -> dict:
+        status = args.get("status") or "new"
+        rows = self.crm.list_angles("" if status == "all" else status, 30)
+        return {"status": status, "count": len(rows), "angles": rows}
+
+    def _tool_crm_angle_use(self, args: dict) -> dict:
+        angle = self.crm.angle(args.get("id") or "")
+        if not angle:
+            raise McpError(-32602, "angle not found")
+        channel = (self.cfg.newsletter_jids or ("",))[0] if self.cfg else ""
+        post = self.crm.create_channel_post({
+            "channel_jid": channel,
+            "title": (angle.get("angle") or angle.get("title") or "")[:120],
+            "body": f"{angle.get('angle') or ''}\n\nالمصدر: {angle.get('url') or ''}".strip(),
+            "status": "draft",
+            "media_type": "text",
+            "meta": json.dumps({"angle_id": angle["id"], "source_url": angle.get("url")}),
+            "created_by": "agent",
+        })
+        self.crm.set_angle_status(angle["id"], "used", post["id"])
+        return {"ok": True, "angle_id": angle["id"], "post_id": post["id"],
+                "status": post["status"]}
+
+    def _tool_crm_angle_dismiss(self, args: dict) -> dict:
+        row = self.crm.set_angle_status(args.get("id") or "", "dismissed")
+        if not row:
+            raise McpError(-32602, "angle not found")
+        return {"ok": True, "id": row["id"], "status": row["status"]}
 
     def _tool_crm_get_brand(self, args: dict) -> dict:
         return self.crm.get_brand()

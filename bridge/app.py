@@ -453,10 +453,33 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/ui", "/ui/"):
             scheduled = crm.list_posts("scheduled", 10)
             scheduled.sort(key=lambda p: p.get("scheduled_at") or 0)
+            insights = crm.content_insights(30)
+            stats = crm.stats()
+            reports = {
+                "insights": insights,
+                "times": (crm.posting_times(90).get("best") or [])[:3],
+                "gaps": (crm.content_gaps(60).get("opportunities") or [])[:3],
+                "growth": crm.channel_growth(30),
+                "angles": crm.list_angles("new", 3),
+                "angle_count": crm.count_angles(),
+                "ops": {
+                    "failed": crm.count_posts("failed"),
+                    "drafts": crm.count_posts("draft"),
+                    "backup": ui.fmt_ts(crm.store.get_meta("last_backup_at")),
+                    "heartbeat": ui.fmt_ts(crm.store.get_meta("last_heartbeat_at")),
+                },
+            }
             return self._send_html(200, ui.dashboard(
-                stats=crm.stats(), scheduled=scheduled, followups=crm.followups(0),
+                stats=stats, scheduled=scheduled, followups=crm.followups(0),
                 unread=crm.unread_count(), metrics=crm.channel_metrics(7),
-                plan=crm.get_plan()))
+                plan=crm.get_plan(), reports=reports))
+        if path == "/ui/radar":
+            last = crm.store.get_meta("last_radar_scan") or ""
+            notice = (query.get("ok") or [""])[0]
+            return self._send_html(200, ui.radar_page(
+                crm.list_angles("new", 30),
+                f"آخر مسح: {ui.fmt_ts(last)}" if last else "لم يُمسح بعد",
+                notice))
         if path == "/ui/brand":
             return self._send_html(200, ui.brand_page(crm.get_brand()))
         if path == "/ui/edge":
@@ -840,6 +863,35 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/ui/channel/refresh":
             self.bridge.refresh_channel_info()
             return self._redirect("/ui/channel")
+        if path == "/ui/radar/scan":
+            from radar import scan as radar_scan
+            try:
+                result = radar_scan(crm, self.bridge.cfg, summarize=True)
+                crm.store.set_meta("last_radar_scan", str(int(time.time())))
+                code = "radar_ok" if result.get("ok") else "radar_empty"
+                log.info("radar scan: %s", {k: result.get(k) for k in ("ok", "scanned", "stored")})
+            except Exception:
+                log.exception("radar scan failed")
+                code = "radar_failed"
+            return self._redirect(f"/ui/radar?ok={code}")
+        if path == "/ui/radar/use":
+            angle = crm.angle(form.get("id", ""))
+            if angle:
+                post = crm.create_channel_post({
+                    "channel_jid": (self.bridge.cfg.newsletter_jids or ("",))[0],
+                    "title": (angle.get("angle") or angle.get("title") or "")[:120],
+                    "body": f"{angle.get('angle') or ''}\n\nالمصدر: {angle.get('url') or ''}".strip(),
+                    "status": "draft",
+                    "media_type": "text",
+                    "meta": json.dumps({"angle_id": angle["id"], "source_url": angle.get("url")}),
+                    "created_by": "human",
+                })
+                crm.set_angle_status(angle["id"], "used", post["id"])
+                return self._redirect(f"/ui/post/{post['id']}?ok=created")
+            return self._redirect("/ui/radar?ok=missing")
+        if path == "/ui/radar/dismiss":
+            crm.set_angle_status(form.get("id", ""), "dismissed")
+            return self._redirect("/ui/radar")
         if path == "/ui/followup/done":
             if form.get("id"):
                 crm.complete_activity(form["id"])

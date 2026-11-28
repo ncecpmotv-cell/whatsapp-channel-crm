@@ -115,6 +115,8 @@ class Bridge:
                 watchdog.start(self.crm, self.gowa, self.cfg)
             except Exception as exc:
                 log.warning("watchdog not started: %s", exc)
+        if getattr(self.cfg, "radar_enabled", False):
+            threading.Thread(target=self._radar_loop, daemon=True, name="radar").start()
         if getattr(self.cfg, "digest_enabled", True):
             try:
                 from digest import start_scheduler
@@ -124,6 +126,20 @@ class Bridge:
 
     def stop(self) -> None:
         self._stop.set()
+
+    def _radar_loop(self) -> None:
+        """Headlines only: no model call, so a background scan costs nothing but a GET."""
+        interval = max(900, int(getattr(self.cfg, "radar_interval", 7200)))
+        while not self._stop.is_set():
+            try:
+                import radar
+                result = radar.scan(self.crm, self.cfg, summarize=False, notify=True)
+                if result.get("stored"):
+                    self.crm.store.set_meta("last_radar_scan", str(int(time.time())))
+                    log.info("radar stored %s angles", result["stored"])
+            except Exception:
+                log.warning("radar scan skipped", exc_info=True)
+            self._stop.wait(interval)
 
     def _outbox_loop(self) -> None:
         while not self._stop.is_set():

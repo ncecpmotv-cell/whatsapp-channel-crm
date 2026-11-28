@@ -73,6 +73,8 @@ class Config:
     edge_url: str = ""
     edge_token: str = ""
     edge_offsite: bool = True
+    radar_enabled: bool = True
+    radar_interval: int = 7200
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -141,6 +143,8 @@ class Config:
             edge_url=(get("EDGE_URL") or "").rstrip("/"),
             edge_token=get("EDGE_TOKEN"),
             edge_offsite=get_bool("EDGE_OFFSITE", True),
+            radar_enabled=get_bool("RADAR_ENABLED", True),
+            radar_interval=get_int("RADAR_INTERVAL", 7200),
         )
         cfg.validate()
         return cfg
@@ -167,5 +171,5 @@ _KNOWN_KEYS = {
     "DIGEST_ENABLED", "DIGEST_WEEKDAY", "DIGEST_HOUR", "PICOCLAW_HOME", "MEDIA_DIR",
     "BACKUP_ENABLED", "BACKUP_HOUR", "BACKUP_KEEP", "BACKUP_DIR",
     "WATCHDOG_ENABLED", "WATCHDOG_INTERVAL", "DAILY_BRIEF_ENABLED", "DAILY_BRIEF_HOUR",
-    "EDGE_URL", "EDGE_TOKEN", "EDGE_OFFSITE",
+    "EDGE_URL", "EDGE_TOKEN", "EDGE_OFFSITE", "RADAR_ENABLED", "RADAR_INTERVAL",
 }

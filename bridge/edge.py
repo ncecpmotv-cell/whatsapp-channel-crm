@@ -103,6 +103,30 @@ class EdgeClient:
         except ValueError:
             return []
 
+    def radar(self) -> dict:
+        if not self.enabled():
+            return {"items": []}
+        status, body = self._request("GET", "/radar")
+        if status != 200:
+            return {"items": [], "error": f"status {status}"}
+        try:
+            return json.loads(body)
+        except ValueError:
+            return {"items": [], "error": "bad json"}
+
+    def radar_summarize(self, titles: list[str]) -> dict:
+        if not self.enabled() or not titles:
+            return {"angles": []}
+        status, body = self._request("POST", "/radar/summarize",
+                                     json.dumps({"titles": titles[:6]}).encode(),
+                                     {"content-type": "application/json"})
+        if status != 200:
+            return {"angles": [], "error": f"status {status}"}
+        try:
+            return json.loads(body)
+        except ValueError:
+            return {"angles": [], "error": "bad json"}
+
     def usage(self) -> dict:
         if not self.enabled():
             return {}

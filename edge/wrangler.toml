@@ -22,6 +22,10 @@ AI_DAILY_LIMIT = "40"
 binding = "BACKUPS"
 bucket_name = "crm-backups"
 
+# Free plan allows cron triggers; every 30 minutes keeps the batch warm without a model call.
+[triggers]
+crons = ["*/30 * * * *"]
+
 [[kv_namespaces]]
 binding = "STATUS"
 id = "9114b63f0a7347bb984f52f0e8235f5b"
