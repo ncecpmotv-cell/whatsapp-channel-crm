@@ -27,6 +27,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0019](0019-edge-backups-status-ai.md) | Off-site encrypted backups, status page, Workers AI | shipped* | R-28 |
 | [0020](0020-brand-kit.md) | Brand kit as data + agent limits | shipped | R-29 |
 | [0021](0021-cost-guardrails.md) | Cost guardrails: refuse instead of billing | shipped | R-30 |
+| [0022](0022-radar-and-reporting-board.md) | Trend radar + a board that reports every feature | shipped | R-31 |
 
 ## Adding one
 

@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] — 2026-11-28
+
+### Added
+
+- **Trend radar**: the edge fetches up to 10 RSS/Atom feeds every 30 minutes (rolling 500-item
+  seen-set in KV, no model call), and the phone scores each headline against its own archive
+  (`0.7 × novelty + 0.3 × recency`) before storing it. `crm_radar_scan`, `crm_angles`,
+  `crm_angle_use` (draft only), `crm_angle_dismiss` — 36 MCP tools.
+- **`/ui/radar`**: angle cards with «مسودة · المصدر · تجاهل», one model call per manual scan.
+- **The board reports everything**: `/ui` became «لوحة القيادة» with average views, engagement rate,
+  cadence, subscriber delta, best posting times (with sample size), content gaps, radar angles,
+  failures, drafts, last backup and last heartbeat.
+- A two-hourly background scan keeps headlines warm at zero AI cost.
+
+### Notes
+
+- `scripts/phone-update.sh` must keep its cache-buster: without it an update silently re-installs
+  the previous commit (observed again — `radar.py` was missing after a "successful" update).
+
 ## [4.0.2] — 2026-11-28
 
 ### Added
