@@ -1,6 +1,6 @@
 # 0019 — Off-site encrypted backups, a public status page, and Workers AI
 
-- **Status:** code shipped and tested · deployment needs the owner's Cloudflare auth
+- **Status:** deployed and live (status + AI) · R2 backup binding waits on the account enabling R2
 - **Owner:** @ncecpmotv-cell
 - **Shipped in:** v4.0.0
 - **Roadmap:** R-28
@@ -46,9 +46,11 @@ proof that the error path is explicit rather than silent.
 
 ## Limits
 
-- **Not deployed yet**: `wrangler deploy` needs the account that owns `edge-mcp`; the R2 bucket
-  and KV namespace must exist first (`wrangler r2 bucket create crm-backups`,
-  `wrangler kv namespace create STATUS`, then paste the id in `wrangler.toml`).
+- **R2 is still off**: `wrangler r2 bucket create crm-backups` answers
+  `10042 Please enable R2 through the Cloudflare Dashboard`, so the binding is commented out in
+  `wrangler.toml` and `/backup` returns 501. Everything else (`/health`, `/heartbeat`, `/status`,
+  `/ai/*`) is live on `https://edge-mcp.ncecpmo.workers.dev`. Uncomment the binding and redeploy
+  once R2 is enabled.
 - Workers AI free allocation is 10,000 neurons/day and some models now require the paid plan;
   a refusal is surfaced verbatim (`model requires Workers Paid`) instead of a silent failure.
 - The status page is public by design and therefore contains counts only — never content,

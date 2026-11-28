@@ -11,6 +11,30 @@ Worker واحد على Cloudflare، يقدّم **MCP** عبر HTTPS. الجوا�
 | `edge_search` | Tavily → Brave → DuckDuckGo (احتياطي) | لا (الاحتياطي غير موثوق) |
 | `edge_status` | المزوّدون المضبوطون، عدد النداءات، الإصدار | لا |
 
+## النشر الحي
+
+| | |
+|---|---|
+| الرابط | `https://edge-mcp.ncecpmo.workers.dev` |
+| الحساب | `0476abbe850271778d2149ce242d005a` (`ncec.pmo.tv@gmail.com`) |
+| نطاق workers.dev | `ncecpmo` (سُجّل عبر `PUT /accounts/<id>/workers/subdomain`) |
+| KV | `STATUS` = `9114b63f0a7347bb984f52f0e8235f5b` |
+| R2 | **معلّق** — الإنشاء يعيد `10042 Please enable R2 through the Cloudflare Dashboard` |
+| النماذج | تحويل: `whisper-large-v3-turbo` → `whisper` · رؤية: `llama-4-scout-17b-16e-instruct` |
+
+`llava-1.5-7b-hf` أُوقف في 2026-11-20، و`whisper-large-v3-turbo` لا يعيد نصًا عربيًا، لذا كل
+مساعد يمشي على قائمة نماذج ويعيد اسم النموذج الذي أجاب فعلًا.
+
+ثلاث مصائد كلّفت وقتًا حقيقيًا:
+
+1. **مفاتيح `cfk_` ليست Bearer tokens.** المفتاح العام يحتاج `X-Auth-Email` + `X-Auth-Key`
+   (في wrangler: `CLOUDFLARE_EMAIL` + `CLOUDFLARE_API_KEY`)، ويحتاج `CLOUDFLARE_ACCOUNT_ID`
+   إن كان المفتاح يرى أكثر من حساب.
+2. **`urllib` بلا User-Agent** يأخذ `403 error code: 1010` من قواعد Cloudflare حتى على Worker
+   خاص بك؛ `bridge/edge.py` يرسل UA حقيقيًا.
+3. **الخدمة على الجوال تقرأ `~/gowa-espo/.env`** لا `~/crm/crm.env`؛ استخدم
+   `scripts/phone-edge-env.sh`.
+
 ## النشر (5 دقائق، بلا بطاقة لخطة Workers المجانية)
 
 ```bash

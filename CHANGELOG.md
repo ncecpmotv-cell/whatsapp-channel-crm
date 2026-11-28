@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] — 2026-11-28
+
+### Fixed
+
+- **Cloudflare bot block**: `bridge/edge.py` now sends a real `User-Agent`; requests from
+  Python urllib were answered with `403 error code: 1010`.
+- **Vision model**: `llava-1.5-7b-hf` was deprecated on 2026-11-20. Caption now uses
+  `llama-4-scout-17b-16e-instruct` with a data-URI image and returns structured
+  `{description, hashtags}`; speech walks `whisper-large-v3-turbo` → `whisper` and reports
+  which model answered.
+
+### Deployed
+
+- `https://edge-mcp.ncecpmo.workers.dev` on account `0476abbe…`: heartbeat, public status and
+  both AI helpers are live. R2 is the one missing piece — the account must enable R2 in the
+  dashboard (`10042`) before the backup binding can be added.
+
+### Added
+
+- `scripts/deploy-edge.sh` — credential check, bucket, KV, secrets, deploy, phone env lines.
+- `scripts/phone-edge-env.sh` — writes `EDGE_URL`/`EDGE_TOKEN` into the env file the service
+  actually reads and restarts it.
+
 ## [4.0.0] — 2026-11-28
 
 ### Added

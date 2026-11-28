@@ -162,17 +162,49 @@ export async function handleStatus(env) {
 }
 
 // ---------------------------------------------------------------- AI
+// Models get deprecated on a schedule (llava-1.5 died 2026-11-20, whisper-turbo no longer
+// answers Arabic), so speech walks a list and vision uses one multimodal chat model that
+// accepts a data-URI image and returns strict JSON.
+const TRANSCRIBE_MODELS = ["@cf/openai/whisper-large-v3-turbo", "@cf/openai/whisper"];
+const VISION_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct";
+
+function toBase64(bytes) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function looseJson(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
 export async function handleTranscribe(request, env) {
   if (!env.AI) return json({ error: "AI binding is missing" }, 501);
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!raw.length) return json({ error: "empty audio" }, 400);
   if (raw.length > MAX_AUDIO_BYTES) return json({ error: "audio too large" }, 413);
-  try {
-    const result = await env.AI.run("@cf/openai/whisper", { audio: Array.from(raw) });
-    return json({ ok: true, text: (result.text || "").trim(), model: "whisper" });
-  } catch (error) {
-    return json({ error: String(error.message || error), model: "whisper" }, 502);
+  const errors = [];
+  for (const model of TRANSCRIBE_MODELS) {
+    try {
+      const result = await env.AI.run(model, { audio: Array.from(raw) });
+      const text = (result.text || "").trim();
+      if (text) return json({ ok: true, text, model });
+      errors.push(`${model}: empty transcript`);
+    } catch (error) {
+      errors.push(`${model}: ${error.message || error}`);
+    }
   }
+  return json({ error: errors.join(" | "), model: "whisper" }, 502);
 }
 
 export async function handleCaption(request, env) {
@@ -180,14 +212,38 @@ export async function handleCaption(request, env) {
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!raw.length) return json({ error: "empty image" }, 400);
   if (raw.length > MAX_IMAGE_BYTES) return json({ error: "image too large" }, 413);
-  const prompt = "اكتب وصفًا عربيًا موجزًا (سطر واحد) وثلاثة هاشتاقات مناسبة لهذه الصورة.";
+  const mime = (request.headers.get("content-type") || "image/jpeg").split(";")[0];
+  const prompt = "صف الصورة في سطر عربي واحد، ثم أعط ثلاث هاشتاقات مناسبة. "
+    + 'أجب بصيغة JSON فقط: {"description":"","hashtags":["#"]}';
   try {
-    const result = await env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
-      image: Array.from(raw), prompt, max_tokens: 220,
+    const result = await env.AI.run(VISION_MODEL, {
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: `data:${mime};base64,${toBase64(raw)}` } },
+        ],
+      }],
+      max_tokens: 300,
     });
-    return json({ ok: true, text: (result.description || result.response || "").trim(),
-                  model: "llava" });
+    const content = result?.choices?.[0]?.message?.content
+      ?? result?.description ?? result?.response ?? "";
+    const text = String(content).trim();
+    const parsed = looseJson(text);
+    if (parsed?.description) {
+      const hashtags = Array.isArray(parsed.hashtags)
+        ? parsed.hashtags.filter((tag) => typeof tag === "string").slice(0, 5) : [];
+      return json({
+        ok: true,
+        description: parsed.description,
+        hashtags,
+        text: [parsed.description, hashtags.join(" ")].filter(Boolean).join("\n\n"),
+        model: VISION_MODEL,
+      });
+    }
+    if (text) return json({ ok: true, text, model: VISION_MODEL });
+    return json({ error: "empty description", model: VISION_MODEL }, 502);
   } catch (error) {
-    return json({ error: String(error.message || error), model: "llava" }, 502);
+    return json({ error: String(error.message || error), model: VISION_MODEL }, 502);
   }
 }

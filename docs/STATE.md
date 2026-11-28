@@ -94,19 +94,15 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.
 
-## نشر الحافة (معلّق)
+## الحافة (edge-mcp)
 
-الكود الجديد لـ`edge/` **مُختبر محليًا (23 اختبارًا) وغير منشور**. يحتاج من المالك:
-
-```bash
-cd edge
-npx wrangler r2 bucket create crm-backups
-npx wrangler kv namespace create STATUS      # ضع الـid في wrangler.toml
-npx wrangler secret put BACKUP_KEY           # base64 لـ32 بايت
-npx wrangler deploy
-```
-
-ثم على الجوال في `~/crm/crm.env`: `EDGE_URL=https://edge-mcp…` و`EDGE_TOKEN=…`.
+- **الرابط الحي:** `https://edge-mcp.ncecpmo.workers.dev` (الإصدار 0.2.0، حساب `0476abbe…`).
+- **يعمل الآن:** `/health` · `/heartbeat` · `/status` · `/ai/transcribe` · `/ai/caption`.
+- **معلّق:** `/backup` — إنشاء حاوية R2 يعيد `10042 Please enable R2 through the Cloudflare Dashboard`؛
+  الربط معلّق في `wrangler.toml` حتى تُفعَّل R2 من اللوحة، ثم يُزال التعليق ويُنشر.
+- **الأسرار:** `EDGE_TOKEN` و`BACKUP_KEY` مضبوطان على الـWorker (المفتاح في `~/.cf.env` على السيرفر، 0600).
+- **مصيدة المسارات:** الخدمة تقرأ `~/gowa-espo/.env` لا `~/crm/crm.env`؛ استخدم `scripts/phone-edge-env.sh`.
+- **مصيدة الاتصال:** `urllib` بلا User-Agent يأخذ 403 `1010` من Cloudflare.
 
 ## الخطوات الثلاث القادمة
 
