@@ -55,8 +55,11 @@ cp -R "$src/scripts/." "$ROOT/scripts/" 2>/dev/null || true
 
 if [ -n "${PREFIX:-}" ] && [ -d "$PREFIX/var/service/crm" ]; then
   if [ -d "$ROOT/picoclaw/skills" ] && [ -d "$HOME/pico" ]; then
+    mkdir -p "$HOME/pico/skills" "$HOME/pico/workspace/skills"
     cp -R "$ROOT/picoclaw/skills/." "$HOME/pico/skills/" 2>/dev/null || true
-    say "skills refreshed in ~/pico/skills"
+    # PicoClaw's read_file is workspace-restricted, so a global-only skill is listed but unreadable.
+    cp -R "$ROOT/picoclaw/skills/." "$HOME/pico/workspace/skills/" 2>/dev/null || true
+    say "skills refreshed in ~/pico/skills and ~/pico/workspace/skills"
   fi
   if [ "$RESTART" = 1 ]; then
     say "restarting crm"
