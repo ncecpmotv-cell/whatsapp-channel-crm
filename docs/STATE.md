@@ -98,6 +98,9 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 
 - **الرابط الحي:** `https://edge-mcp.ncecpmo.workers.dev` (الإصدار 0.2.0، حساب `0476abbe…`).
 - **يعمل الآن:** `/health` · `/heartbeat` · `/status` · `/ai/transcribe` · `/ai/caption`.
+- **مُتحقَّق من الجوال عبر MCP:** تحويل صوت mp3 في 2.9 ثانية · وصف صورة في 3.9 ثانية
+  (`{description, hashtags}`) · `crm_edge_status` يعيد `version 0.2.0` و`status 200` ·
+  `/status` تعرض «يعمل · قبل 0 دقيقة».
 - **معلّق:** `/backup` — إنشاء حاوية R2 يعيد `10042 Please enable R2 through the Cloudflare Dashboard`؛
   الربط معلّق في `wrangler.toml` حتى تُفعَّل R2 من اللوحة، ثم يُزال التعليق ويُنشر.
 - **الأسرار:** `EDGE_TOKEN` و`BACKUP_KEY` مضبوطان على الـWorker (المفتاح في `~/.cf.env` على السيرفر، 0600).

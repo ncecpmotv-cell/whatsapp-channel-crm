@@ -15,6 +15,12 @@ All notable changes to this project are documented here. The format follows
   `{description, hashtags}`; speech walks `whisper-large-v3-turbo` → `whisper` and reports
   which model answered.
 
+### Fixed (phone → edge)
+
+- **MIME for AI uploads**: `bridge/edge.py` sends `image/png`, `audio/mpeg`, … by extension, and
+  the Worker sniffs PNG/JPEG/GIF/WEBP magic bytes when a client sends `application/octet-stream`.
+  Workers AI rejected the image with `8006 expected image/* MIME type`.
+
 ### Deployed
 
 - `https://edge-mcp.ncecpmo.workers.dev` on account `0476abbe…`: heartbeat, public status and

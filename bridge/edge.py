@@ -17,6 +17,15 @@ log = logging.getLogger("bridge.edge")
 
 MAX_UPLOAD = 25 * 1024 * 1024
 
+_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+         ".webp": "image/webp", ".gif": "image/gif", ".heic": "image/heic",
+         ".mp3": "audio/mpeg", ".ogg": "audio/ogg", ".opus": "audio/ogg",
+         ".m4a": "audio/mp4", ".wav": "audio/wav", ".aac": "audio/aac"}
+
+
+def _content_type(path: str) -> str:
+    return _MIME.get(os.path.splitext(path)[1].lower(), "application/octet-stream")
+
 
 class EdgeClient:
     def __init__(self, base_url: str = "", token: str = "", timeout: float = 30.0):
@@ -111,7 +120,7 @@ class EdgeClient:
         with open(full, "rb") as fh:
             body = fh.read()
         status, response = self._request("POST", endpoint, body,
-                                         {"content-type": "application/octet-stream"})
+                                         {"content-type": _content_type(full)})
         data: dict[str, Any]
         try:
             data = json.loads(response)

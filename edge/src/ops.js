@@ -177,6 +177,18 @@ function toBase64(bytes) {
   return btoa(binary);
 }
 
+// Callers occasionally send application/octet-stream; the vision model insists on image/*.
+function imageMime(bytes, declared) {
+  if (declared && declared.startsWith("image/")) return declared;
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return "image/gif";
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[8] === 0x57 && bytes[9] === 0x45) {
+    return "image/webp";
+  }
+  return "image/jpeg";
+}
+
 function looseJson(text) {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
@@ -212,7 +224,7 @@ export async function handleCaption(request, env) {
   const raw = new Uint8Array(await request.arrayBuffer());
   if (!raw.length) return json({ error: "empty image" }, 400);
   if (raw.length > MAX_IMAGE_BYTES) return json({ error: "image too large" }, 413);
-  const mime = (request.headers.get("content-type") || "image/jpeg").split(";")[0];
+  const mime = imageMime(raw, (request.headers.get("content-type") || "").split(";")[0]);
   const prompt = "صف الصورة في سطر عربي واحد، ثم أعط ثلاث هاشتاقات مناسبة. "
     + 'أجب بصيغة JSON فقط: {"description":"","hashtags":["#"]}';
   try {

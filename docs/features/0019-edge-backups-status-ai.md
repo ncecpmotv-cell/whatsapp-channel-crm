@@ -36,6 +36,12 @@ cd edge && npm test          # 23 tests: round-trip, auth, status, retention, AI
 python3 -m unittest bridge.tests.test_edge   # 5 client tests + 2 brand tests
 ```
 
+Measured live from the phone, over the tailnet, through MCP: `crm_transcribe_audio` on a
+42 KB mp3 answered in **2.9 s** (`@cf/openai/whisper`), `crm_caption_image` on a PNG in
+**3.9 s** (`llama-4-scout`) with `{description, hashtags}`, `crm_edge_status` reported
+`version 0.2.0` and `status 200`, and `/status` rendered «يعمل · قبل 0 دقيقة». The off-site
+upload answered `501 R2 binding BACKUPS is missing` — the expected state until R2 is enabled.
+
 Measured in the real Workers runtime (`wrangler dev --local`, workerd with R2/KV emulation):
 a 20 KB payload encrypted to 20,028 bytes (+12 IV, +16 tag), downloaded byte-identical
 (sha256 match), heartbeat flipped `/status` to «يعمل · آخر نبضة قبل 0 دقيقة», and a wrong token
