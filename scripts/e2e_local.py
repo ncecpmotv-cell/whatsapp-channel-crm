@@ -139,7 +139,7 @@ def main() -> int:
         match = re.search(rb'name="csrf" value="([a-f0-9]{32})"', page_body)
         csrf = match.group(1).decode() if match else ""
         check("UI forms carry a csrf token", bool(csrf), str(status))
-        for path, needle in (("/ui", "لوحة اليوم"), ("/ui/content", "المحتوى"),
+        for path, needle in (("/ui", "لوحة القيادة"), ("/ui/content", "المحتوى"),
                              ("/ui/contacts", "العملاء"), ("/ui/metrics", "القياسات")):
             status, body, _ = http("GET", path, headers={"Authorization": auth})
             check(f"UI {path} renders", status == 200 and needle.encode() in body,
