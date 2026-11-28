@@ -12,7 +12,12 @@
  *   - one bearer token; compare it in constant time; never echo it
  */
 
-const VERSION = "0.1.0";
+import {
+  authorised, handleBackupGet, handleBackupList, handleBackupPut, handleCaption,
+  handleHeartbeat, handleStatus, handleTranscribe,
+} from "./ops.js";
+
+const VERSION = "0.2.0";
 const MAX_BYTES = 1_500_000;
 const FETCH_TIMEOUT_MS = 8000;
 
@@ -305,6 +310,29 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { status: 204 });
     if (url.pathname === "/health" || url.pathname === "/") {
       return json({ ok: true, service: "edge-mcp", version: VERSION, tools: TOOLS.length });
+    }
+    if (url.pathname === "/status") return handleStatus(env);
+
+    const ops = ["/backup", "/heartbeat", "/ai/transcribe", "/ai/caption"];
+    if (ops.includes(url.pathname)) {
+      if (!authorised(request, env)) return json({ error: "unauthorized" }, 401);
+      if (url.pathname === "/backup") {
+        if (request.method === "POST") return handleBackupPut(request, env, url);
+        if (request.method === "GET" && url.searchParams.get("name")) {
+          return handleBackupGet(env, url);
+        }
+        return handleBackupList(env);
+      }
+      if (url.pathname === "/heartbeat" && request.method === "POST") {
+        return handleHeartbeat(request, env);
+      }
+      if (url.pathname === "/ai/transcribe" && request.method === "POST") {
+        return handleTranscribe(request, env);
+      }
+      if (url.pathname === "/ai/caption" && request.method === "POST") {
+        return handleCaption(request, env);
+      }
+      return json({ error: "method not allowed" }, 405);
     }
     if (url.pathname !== "/mcp") return json({ error: "not found" }, 404);
     if (request.method !== "POST") return json({ error: "use POST /mcp" }, 405);

@@ -68,9 +68,25 @@ def start(crm, gowa, cfg) -> object:
     interval = max(60, int(getattr(cfg, "watchdog_interval", 300)))
 
     def loop():
+        from edge import from_config
         while True:
             try:
                 fired = check(crm, gowa, cfg)
+                client = from_config(cfg)
+                if client.enabled():
+                    try:
+                        status = (gowa.device_status(timeout=4) or {}).get("results") or {}
+                        sent = client.heartbeat({
+                            "posts": crm.count_posts(),
+                            "scheduled": crm.count_posts("scheduled"),
+                            "gowa": bool(status.get("is_logged_in")),
+                            "version": "4.0.0",
+                            "backup": crm.store.get_meta("last_offsite_name") or "",
+                        })
+                        if sent:
+                            crm.store.set_meta("last_heartbeat_at", str(int(time.time())))
+                    except Exception as exc:
+                        log.warning("heartbeat failed: %s", exc)
                 if fired:
                     log.warning("watchdog alerts: %s", [a["code"] for a in fired])
                 if getattr(cfg, "backup_enabled", True):

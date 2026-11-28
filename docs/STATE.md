@@ -94,6 +94,20 @@ https://github.com/ncecpmotv-cell/whatsapp-channel-crm — **عام**، فرع `
 - **طبقة سحابية اختيارية**: القرار موثّق في `docs/CLOUD-PLACEMENT.md` (Cloudflare للبحث/Google/الصوت، Convex مؤجل).
 - **فجوة تحليلية**: 40 منشورًا فقط — إشارات التوقيت ضعيفة؛ قلها صراحة في أي خطة.
 
+## نشر الحافة (معلّق)
+
+الكود الجديد لـ`edge/` **مُختبر محليًا (23 اختبارًا) وغير منشور**. يحتاج من المالك:
+
+```bash
+cd edge
+npx wrangler r2 bucket create crm-backups
+npx wrangler kv namespace create STATUS      # ضع الـid في wrangler.toml
+npx wrangler secret put BACKUP_KEY           # base64 لـ32 بايت
+npx wrangler deploy
+```
+
+ثم على الجوال في `~/crm/crm.env`: `EDGE_URL=https://edge-mcp…` و`EDGE_TOKEN=…`.
+
 ## الخطوات الثلاث القادمة
 
 | # | الخطوة | القبول |

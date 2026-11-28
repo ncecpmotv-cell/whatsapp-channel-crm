@@ -763,6 +763,40 @@ class CrmClient:
         return {"days": days, "tz_offset": offset, "buckets": len(ranked),
                 "best": ranked[:8], "worst": ranked[-3:] if len(ranked) > 3 else []}
 
+    # -- brand kit ----------------------------------------------------------
+    BRAND_DEFAULT = {
+        "name": "",
+        "tagline": "",
+        "palette": {"deep": "#2A3A31", "sage": "#3E4D42", "gold": "#C5A059", "beige": "#F5F1E9"},
+        "fonts": {"display": "Tajawal", "body": "IBM Plex Sans Arabic"},
+        "tone": "فصحى حديثة، جمل قصيرة، بلا مبالغة. مخاطبة الجمع.",
+        "dos": ["فائدة واحدة في كل منشور", "سطر أول يوقف التمرير", "دعوة واحدة واضحة"],
+        "donts": ["بلا شعارات أو أسماء شخصية", "بلا مبالغات أو وعود مطلقة",
+                  "بلا نسخ حرفي من منشور سابق", "بلا استبيانات (غير مدعومة في القنوات)"],
+        "limits": {"max_chars": 1024, "media_mb": 20, "per_day": 30, "polls": False},
+    }
+
+    def get_brand(self) -> dict:
+        raw = self.store.get_meta("brand")
+        brand = json.loads(raw) if raw else {}
+        merged = dict(self.BRAND_DEFAULT)
+        for key, value in brand.items():
+            if isinstance(value, dict) and isinstance(merged.get(key), dict):
+                merged[key] = {**merged[key], **value}
+            else:
+                merged[key] = value
+        return merged
+
+    def set_brand(self, patch: dict) -> dict:
+        current = self.get_brand()
+        for key, value in (patch or {}).items():
+            if isinstance(value, dict) and isinstance(current.get(key), dict):
+                current[key] = {**current[key], **value}
+            else:
+                current[key] = value
+        self.store.set_meta("brand", json.dumps(current, ensure_ascii=False))
+        return current
+
     # -- growth, variants, daily snapshot ----------------------------------
     def snapshot_channel_day(self, day: str | None = None) -> dict:
         """One row per local day: subscribers + that day's posts/views. Idempotent."""

@@ -24,6 +24,8 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0016](0016-backups-and-watchdog.md) | Verified backups, watchdog alerts | shipped | R-25 |
 | [0017](0017-growth-brief-proactive.md) | Growth history, daily brief, proactive plan | shipped | R-26 |
 | [0018](0018-search-media-variants.md) | Search page, media library, A/B variants | shipped | R-27 |
+| [0019](0019-edge-backups-status-ai.md) | Off-site encrypted backups, status page, Workers AI | shipped* | R-28 |
+| [0020](0020-brand-kit.md) | Brand kit as data + agent limits | shipped | R-29 |
 
 ## Adding one
 

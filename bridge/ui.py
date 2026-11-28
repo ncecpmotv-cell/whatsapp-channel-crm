@@ -974,7 +974,11 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 </div>
 <div class="card"><span class="muted">رابط الدعوة: </span>{invite_html}</div>
 {growth_html}
-<div class="row" style="justify-content:flex-end"><a class="chip" href="/ui/media">مكتبة الوسائط</a></div>
+<div class="row" style="justify-content:flex-end;gap:6px">
+  <a class="chip" href="/ui/brand">الهوية</a>
+  <a class="chip" href="/ui/edge">التشغيل</a>
+  <a class="chip" href="/ui/media">مكتبة الوسائط</a>
+</div>
 {best_html}
 <h2>التفاعل اليومي</h2>
 <div class="card">{_bars(series, "views")}</div>
@@ -987,6 +991,55 @@ def channel_page(info: dict | None, summary: dict, series: list[dict],
 
 
 # ----------------------------------------------------------------- notifications
+def edge_page(state: dict) -> bytes:
+    enabled = state.get("enabled")
+    rows = [
+        ("حالة الحافة", "مفعّلة" if enabled else "غير مهيّأة"),
+        ("إصدار العامل", state.get("version") or "—"),
+        ("آخر نبضة", fmt_ts(state.get("last_heartbeat_at"))),
+        ("آخر نسخة خارجية", fmt_ts(state.get("last_offsite_at"))),
+        ("ملف النسخة", state.get("last_offsite_name") or "—"),
+        ("نسخ محفوظة سحابيًا", state.get("offsite_backups", 0)),
+    ]
+    cards = "".join(f'<div class="stat"><b>{esc(v)}</b><span>{esc(k)}</span></div>' for k, v in rows)
+    body = f"""
+<h1>التشغيل والحافة</h1>
+<div class="grid">{cards}</div>
+<p class="muted">النبضة كل 5 دقائق، والنسخة المشفّرة تُرفع بعد كل نسخة محلية ناجحة.</p>
+"""
+    return page("التشغيل", body, "today")
+
+
+def brand_page(brand: dict) -> bytes:
+    palette = brand.get("palette") or {}
+    swatches = "".join(
+        f'<span style="display:inline-flex;align-items:center;gap:6px;margin:4px 8px 4px 0">'
+        f'<span style="width:20px;height:20px;border-radius:6px;background:{esc(v)};'
+        f'border:1px solid #444"></span><code>{esc(k)} {esc(v)}</code></span>'
+        for k, v in palette.items())
+    dos = "".join(f"<li>{esc(x)}</li>" for x in brand.get("dos") or [])
+    donts = "".join(f"<li>{esc(x)}</li>" for x in brand.get("donts") or [])
+    limits = brand.get("limits") or {}
+    fonts = brand.get("fonts") or {}
+    body = f"""
+<h1>هوية القناة</h1>
+<p class="muted">{esc(brand.get("tagline") or "حدّد شعارًا ونبرة ثم اطلب من الوكيل الالتزام بها.")}</p>
+<h2>الألوان</h2><div class="card">{swatches or "—"}</div>
+<h2>الخطوط</h2><div class="card">{esc(fonts.get("display"))} · {esc(fonts.get("body"))}</div>
+<h2>النبرة</h2><div class="card">{esc(brand.get("tone") or "—")}</div>
+<h2>افعل</h2><ul>{dos}</ul>
+<h2>لا تفعل</h2><ul>{donts}</ul>
+<h2>حدود القناة</h2>
+<div class="grid">
+  <div class="stat"><b>{esc(limits.get("max_chars"))}</b><span>حرفًا للمنشور</span></div>
+  <div class="stat"><b>{esc(limits.get("media_mb"))}</b><span>ميغابايت للوسائط</span></div>
+  <div class="stat"><b>{esc(limits.get("per_day"))}</b><span>منشورًا يوميًا</span></div>
+  <div class="stat"><b>{"لا" if limits.get("polls") is False else "نعم"}</b><span>استبيانات</span></div>
+</div>
+"""
+    return page("الهوية", body, "channel")
+
+
 def search_page(query: str, results: list[dict]) -> bytes:
     rows = "".join(
         f'<a class="card" href="/ui/post/{esc(r["id"])}">'

@@ -192,6 +192,46 @@ TOOLS = [
         },
     },
     {
+        "name": "crm_transcribe_audio",
+        "description": "Transcribe a local audio file (the voice note PicoClaw downloaded) using "
+                       "Workers AI on the edge; returns Arabic/English text.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string", "description": "absolute path"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "crm_caption_image",
+        "description": "Describe a local image and suggest hashtags (Workers AI vision).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        },
+    },
+    {
+        "name": "crm_get_brand",
+        "description": "The channel's brand kit: palette, fonts, tone, do/don't lists and posting "
+                       "limits. Read it before writing any copy.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "crm_set_brand",
+        "description": "Update part of the brand kit (deep-merged). Use it when the owner refines "
+                       "the palette, tone or limits.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"patch": {"type": "object", "description": "keys to merge"}},
+            "required": ["patch"],
+        },
+    },
+    {
+        "name": "crm_edge_status",
+        "description": "Edge health, off-site backup state and last heartbeat age.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "channel_growth",
         "description": "Subscriber and view history per day, with the delta over the window.",
         "inputSchema": {
@@ -372,9 +412,10 @@ class McpError(Exception):
 
 
 class McpServer:
-    def __init__(self, crm, gowa, store=None, health=None, can_publish: bool = False):
+    def __init__(self, crm, gowa, store=None, health=None, can_publish: bool = False, cfg=None):
         self.crm = crm
         self.gowa = gowa
+        self.cfg = cfg
         self.store = store
         self._health = health
         self.can_publish = can_publish
@@ -530,6 +571,42 @@ class McpServer:
             items=args.get("items") or [],
             title=args.get("title") or "",
             notes=args.get("notes") or "")
+
+    def _edge(self):
+        from edge import from_config  # local import keeps mcp usable without a config
+        return from_config(self.cfg) if self.cfg else None
+
+    def _tool_crm_get_brand(self, args: dict) -> dict:
+        return self.crm.get_brand()
+
+    def _tool_crm_set_brand(self, args: dict) -> dict:
+        patch = args.get("patch") or {}
+        if not isinstance(patch, dict):
+            raise McpError(-32602, "patch must be an object")
+        return self.crm.set_brand(patch)
+
+    def _tool_crm_transcribe_audio(self, args: dict) -> dict:
+        client = self._edge()
+        if client is None or not client.enabled():
+            raise McpError(-32000, "edge is not configured (EDGE_URL/EDGE_TOKEN)")
+        return client.transcribe(args.get("path") or "")
+
+    def _tool_crm_caption_image(self, args: dict) -> dict:
+        client = self._edge()
+        if client is None or not client.enabled():
+            raise McpError(-32000, "edge is not configured (EDGE_URL/EDGE_TOKEN)")
+        return client.caption(args.get("path") or "")
+
+    def _tool_crm_edge_status(self, args: dict) -> dict:
+        client = self._edge()
+        if client is None or not client.enabled():
+            return {"enabled": False}
+        state = client.health()
+        state["last_heartbeat_at"] = self.crm.store.get_meta("last_heartbeat_at")
+        state["last_offsite_at"] = self.crm.store.get_meta("last_offsite_at")
+        state["last_offsite_name"] = self.crm.store.get_meta("last_offsite_name")
+        state["offsite_backups"] = len(client.backups())
+        return state
 
     def _tool_channel_growth(self, args: dict) -> dict:
         return self.crm.channel_growth(int(args.get("days") or 90))

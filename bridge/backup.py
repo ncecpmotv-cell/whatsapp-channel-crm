@@ -132,6 +132,19 @@ def maybe_backup(crm, cfg, now: float | None = None) -> bool:
     result = make_backup(cfg.db_path, getattr(cfg, "media_dir", ""), dest,
                          keep=int(getattr(cfg, "backup_keep", 7)), now=now)
     crm.store.set_meta("last_backup_at", str(int(now)))
+    if getattr(cfg, "edge_offsite", True):
+        try:
+            from edge import from_config
+            client = from_config(cfg)
+            if client.enabled():
+                upload = client.upload_backup(result["archive"])
+                if upload.get("ok"):
+                    crm.store.set_meta("last_offsite_at", str(int(now)))
+                    crm.store.set_meta("last_offsite_name", upload.get("name") or "")
+                else:
+                    log.warning("off-site upload failed: %s", upload.get("error") or upload)
+        except Exception as exc:
+            log.warning("off-site backup skipped: %s", exc)
     crm.notify("digest", "نسخة احتياطية",
                f"{os.path.basename(result['archive'])} · {result['posts']} منشورًا"
                + ("" if result["verified"] else " · فشل التحقق"),

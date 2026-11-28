@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] — 2026-11-28
+
+### Added
+
+- **Off-site encrypted backups**: the phone uploads each verified archive; the Worker encrypts
+  it with AES-GCM into R2, keeps an index of 30 in KV, prunes older objects, and serves an
+  authenticated download that decrypts byte-identically.
+- **Heartbeat + public status page**: `/status` shows «يعمل / متوقف عن الإرسال», last beat
+  age, counts and the last off-site archive — no secrets, no login.
+- **Workers AI tools**: `crm_transcribe_audio` (whisper) and `crm_caption_image` (llava) call
+  the edge with local file bytes; `/ui/edge` shows edge health, heartbeat age and off-site state.
+- **Brand kit**: `crm_get_brand` / `crm_set_brand` (deep merge) with the channel palette, fonts,
+  tone, do/don't lists and enforced limits; `/ui/brand` renders it and a `channel-brand` skill
+  makes the agent obey it.
+- 30 local MCP tools · 23 edge tests · 69 Python tests.
+
+### Notes
+
+- The Worker build is tested locally and in `node:test`, but **not deployed**: it needs the
+  Cloudflare account that owns `edge-mcp` plus an R2 bucket and a KV namespace.
+
 ## [3.8.0] — 2026-11-27
 
 ### Added

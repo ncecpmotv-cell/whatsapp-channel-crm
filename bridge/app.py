@@ -457,6 +457,22 @@ class Handler(BaseHTTPRequestHandler):
                 stats=crm.stats(), scheduled=scheduled, followups=crm.followups(0),
                 unread=crm.unread_count(), metrics=crm.channel_metrics(7),
                 plan=crm.get_plan()))
+        if path == "/ui/brand":
+            return self._send_html(200, ui.brand_page(crm.get_brand()))
+        if path == "/ui/edge":
+            state = {"enabled": False}
+            try:
+                from edge import from_config
+                client = from_config(self.bridge.cfg)
+                if client.enabled():
+                    state = client.health()
+                    state["last_heartbeat_at"] = crm.store.get_meta("last_heartbeat_at")
+                    state["last_offsite_at"] = crm.store.get_meta("last_offsite_at")
+                    state["last_offsite_name"] = crm.store.get_meta("last_offsite_name")
+                    state["offsite_backups"] = len(client.backups())
+            except Exception:
+                pass
+            return self._send_html(200, ui.edge_page(state))
         if path == "/ui/search":
             term = (query.get("q") or [""])[0].strip()
             results = crm.semantic_search(term, 20)["results"] if term else []
@@ -831,7 +847,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def make_server(cfg: Config, bridge: Bridge) -> ThreadingHTTPServer:
     mcp = McpServer(bridge.crm, bridge.gowa, bridge.store, bridge.health,
-                    can_publish=cfg.agent_can_publish)
+                    can_publish=cfg.agent_can_publish, cfg=cfg)
     handler = type("BoundHandler", (Handler,), {"bridge": bridge, "mcp": mcp})
     server = ThreadingHTTPServer((cfg.bridge_host, cfg.bridge_port), handler)
     server.daemon_threads = True

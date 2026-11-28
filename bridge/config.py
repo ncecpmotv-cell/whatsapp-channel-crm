@@ -69,6 +69,10 @@ class Config:
     watchdog_interval: int = 300
     daily_brief_enabled: bool = True
     daily_brief_hour: int = 9
+    # optional edge (Cloudflare Worker): off-site backups, heartbeat, Workers AI
+    edge_url: str = ""
+    edge_token: str = ""
+    edge_offsite: bool = True
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -134,6 +138,9 @@ class Config:
             watchdog_interval=get_int("WATCHDOG_INTERVAL", 300),
             daily_brief_enabled=get_bool("DAILY_BRIEF_ENABLED", True),
             daily_brief_hour=get_int("DAILY_BRIEF_HOUR", 9),
+            edge_url=(get("EDGE_URL") or "").rstrip("/"),
+            edge_token=get("EDGE_TOKEN"),
+            edge_offsite=get_bool("EDGE_OFFSITE", True),
         )
         cfg.validate()
         return cfg
@@ -160,4 +167,5 @@ _KNOWN_KEYS = {
     "DIGEST_ENABLED", "DIGEST_WEEKDAY", "DIGEST_HOUR", "PICOCLAW_HOME", "MEDIA_DIR",
     "BACKUP_ENABLED", "BACKUP_HOUR", "BACKUP_KEEP", "BACKUP_DIR",
     "WATCHDOG_ENABLED", "WATCHDOG_INTERVAL", "DAILY_BRIEF_ENABLED", "DAILY_BRIEF_HOUR",
+    "EDGE_URL", "EDGE_TOKEN", "EDGE_OFFSITE",
 }
