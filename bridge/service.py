@@ -115,6 +115,12 @@ class Bridge:
                 watchdog.start(self.crm, self.gowa, self.cfg)
             except Exception as exc:
                 log.warning("watchdog not started: %s", exc)
+        if getattr(self.cfg, "model_watch_enabled", False):
+            try:
+                import modelwatch
+                modelwatch.start(self.crm, self.cfg)
+            except Exception as exc:
+                log.warning("model watch not started: %s", exc)
         if getattr(self.cfg, "radar_enabled", False):
             threading.Thread(target=self._radar_loop, daemon=True, name="radar").start()
         if getattr(self.cfg, "digest_enabled", True):

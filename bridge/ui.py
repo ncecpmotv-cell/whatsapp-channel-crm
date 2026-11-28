@@ -468,6 +468,12 @@ def capabilities_page(data: dict) -> bytes:
     cost = data.get("cost") or {}
 
     models = data.get("models") or {}
+    health = models.get("health") or {}
+    if health:
+        model_health = (f"الفحص الأخير: {'سليم' if health.get('healthy') else 'متعطل'} · "
+                        f"النشط {health.get('active') or '—'} · السبب {health.get('reason') or '—'}")
+    else:
+        model_health = "لم يُفحص بعد — يفحص كل ٣٠ دقيقة بلا توكنات."
     model_rows = "".join(
         f'<div class="row"><span>{esc(item.get("name") or "")}</span>'
         f'<span class="muted">{esc(item.get("model") or "")}</span>'
@@ -502,7 +508,8 @@ def capabilities_page(data: dict) -> bytes:
   <div class="stat"><b>{esc(len(cron))}</b><span>مهمة مجدولة</span></div>
 </div>
 <h2>المهارات</h2><div class="card">{skill_chips}</div>
-<h2>النماذج</h2><div class="card">{model_rows}</div>
+<h2>النماذج</h2><div class="card">{model_rows}
+<p class="muted">{model_health}</p></div>
 <h2>سيرفرات MCP</h2><div class="card">{mcp_rows}</div>
 <h2>المهام المجدولة</h2><div class="card">{cron_rows}</div>
 <h2>بوابات المنع</h2><div class="card"><ul>{guard_rows}</ul></div>

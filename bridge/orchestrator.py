@@ -181,10 +181,14 @@ def capabilities(crm, picoclaw_home: str = "", tools_count: int = 0) -> dict:
                "base": entry.get("api_base"), "enabled": entry.get("enabled", True)}
               for entry in (config.get("model_list") or [])]
     current = ((config.get("agents") or {}).get("defaults") or {}).get("model_name")
+    try:
+        health = json.loads(crm.store.get_meta("model_health") or "{}")
+    except ValueError:
+        health = {}
     return {
         "skills": {"count": len(skills), "names": skills},
         "tools": {"count": tools_count},
-        "models": {"current": current, "list": models},
+        "models": {"current": current, "list": models, "health": health},
         "mcp": servers,
         "cron": jobs,
         "guards": GUARDS,

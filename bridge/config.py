@@ -74,6 +74,8 @@ class Config:
     edge_token: str = ""
     edge_offsite: bool = True
     agent_token: str = ""
+    model_watch_enabled: bool = True
+    model_watch_interval: int = 1800
     radar_enabled: bool = True
     radar_interval: int = 7200
 
@@ -145,6 +147,8 @@ class Config:
             edge_token=get("EDGE_TOKEN"),
             edge_offsite=get_bool("EDGE_OFFSITE", True),
             agent_token=get("AGENT_TOKEN"),
+            model_watch_enabled=get_bool("MODEL_WATCH_ENABLED", True),
+            model_watch_interval=get_int("MODEL_WATCH_INTERVAL", 1800),
             radar_enabled=get_bool("RADAR_ENABLED", True),
             radar_interval=get_int("RADAR_INTERVAL", 7200),
         )
@@ -174,4 +178,5 @@ _KNOWN_KEYS = {
     "BACKUP_ENABLED", "BACKUP_HOUR", "BACKUP_KEEP", "BACKUP_DIR",
     "WATCHDOG_ENABLED", "WATCHDOG_INTERVAL", "DAILY_BRIEF_ENABLED", "DAILY_BRIEF_HOUR",
     "EDGE_URL", "EDGE_TOKEN", "EDGE_OFFSITE", "RADAR_ENABLED", "RADAR_INTERVAL", "AGENT_TOKEN",
+    "MODEL_WATCH_ENABLED", "MODEL_WATCH_INTERVAL",
 }

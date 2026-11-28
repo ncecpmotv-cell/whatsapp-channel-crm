@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.18.0] — 2026-11-28
+
+### Added
+
+- **`modelwatch`**: every 30 minutes it probes the primary provider's `/models` (zero tokens),
+  switches to `fallback` on failure and back on recovery, notifies, and stores
+  `meta.model_health` — shown on `/ui/capabilities`.
+- **FreeRide evaluated on the server**: `freeride-gateway` served tool calls in 1.6 s at 69 MB RSS.
+  Not installed on the phone: Termux's `libexpat` is older than Python 3.14 requires, so `pip`
+  itself fails and the fix is a full OS upgrade. `docs/FREERIDE.md` records the measurements and
+  the two supported ways to run it anyway.
+
 ## [4.17.0] — 2026-11-28
 
 ### Added
