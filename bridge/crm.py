@@ -19,6 +19,8 @@ import json
 import math
 import os
 import re
+import shutil
+import struct
 import time
 import uuid
 from typing import Any
@@ -228,9 +230,18 @@ def _bigrams(tokens: list[str]) -> list[str]:
 class CrmClient:
     """SQLite-backed CRM. Shares the bridge Store's connection and lock."""
 
-    def __init__(self, store, tz_offset: int = 3):
+    MEDIA_EXTS = {
+        "image": {".png", ".jpg", ".jpeg", ".webp", ".gif"},
+        "video": {".mp4", ".mov", ".webm"},
+        "audio": {".mp3", ".ogg", ".m4a", ".wav"},
+        "file": {".pdf", ".zip", ".docx", ".xlsx", ".csv", ".txt"},
+    }
+    MEDIA_MAX = 20 * 1024 * 1024
+
+    def __init__(self, store, tz_offset: int = 3, media_dir: str = ""):
         self.store = store
         self.tz_offset = int(tz_offset)
+        self.media_dir = os.path.expanduser(media_dir or "~/crm/var/media")
         self.pusher: Any = None  # set by Bridge; PushNotifier or None
         self._conn = store.conn
         self._lock = store.lock
@@ -742,6 +753,169 @@ class CrmClient:
         ranked.sort(key=lambda x: (-x["avg_views"], -x["posts"]))
         return {"days": days, "tz_offset": offset, "buckets": len(ranked),
                 "best": ranked[:8], "worst": ranked[-3:] if len(ranked) > 3 else []}
+
+    # -- media, lint, best slot --------------------------------------------
+    def _image_size(self, data: bytes) -> tuple[int, int] | None:
+        if len(data) < 24:
+            return None
+        if data[:8] == b"\x89PNG\r\n\x1a\n":
+            return struct.unpack(">II", data[16:24])
+        if data[:6] in (b"GIF87a", b"GIF89a"):
+            return struct.unpack("<HH", data[6:10])
+        if data[:2] == b"\xff\xd8":
+            i = 2
+            while i + 9 < len(data):
+                if data[i] != 0xFF:
+                    i += 1
+                    continue
+                marker = data[i + 1]
+                if marker in (0xC0, 0xC1, 0xC2):
+                    height, width = struct.unpack(">HH", data[i + 5:i + 9])
+                    return width, height
+                if marker in (0xD8, 0xD9):
+                    i += 2
+                    continue
+                length = struct.unpack(">H", data[i + 2:i + 4])[0]
+                i += 2 + length
+        return None
+
+    def attach_media(self, post_id: str, path: str, kind: str | None = None,
+                     at=None) -> dict:
+        """Attach a local file (e.g. what PicoClaw downloaded from Telegram) to a post."""
+        post = self.get_channel_post(post_id)
+        if not post:
+            raise ValueError("المنشور غير موجود")
+        if post["status"] == "published":
+            raise PermissionError("لا يمكن تعديل منشور منشور على القناة")
+        source = os.path.abspath(os.path.expanduser(path or ""))
+        roots = [os.path.expanduser(r.strip()) for r in
+                 (os.environ.get("ATTACH_ROOTS") or "~").split(",") if r.strip()]
+        if not any(source == root or source.startswith(root + os.sep) for root in roots):
+            raise ValueError("المسار خارج المجلدات المسموحة")
+        if not os.path.isfile(source):
+            raise ValueError("الملف غير موجود")
+        size = os.path.getsize(source)
+        if size > self.MEDIA_MAX:
+            raise ValueError("الملف أكبر من 20MB")
+        ext = os.path.splitext(source)[1].lower()
+        chosen = (kind or post.get("media_type") or "").lower()
+        if chosen not in self.MEDIA_EXTS:
+            chosen = next((k for k, exts in self.MEDIA_EXTS.items() if ext in exts), "")
+        if not chosen:
+            raise ValueError(f"امتداد غير مدعوم: {ext}")
+        if ext not in self.MEDIA_EXTS[chosen]:
+            raise ValueError(f"{ext} ليس من نوع {chosen}")
+        os.makedirs(self.media_dir, exist_ok=True)
+        name = uuid.uuid4().hex[:12] + ext
+        destination = os.path.join(self.media_dir, name)
+        shutil.copyfile(source, destination)
+        meta = {}
+        try:
+            meta = json.loads(post.get("meta") or "{}")
+        except ValueError:
+            meta = {}
+        if chosen == "image":
+            with open(destination, "rb") as fh:
+                dims = self._image_size(fh.read(64 * 1024))
+            if dims:
+                meta["width"], meta["height"] = dims
+        self.update_channel_post(post_id, {
+            "media_type": chosen, "media_path": destination,
+            "meta": json.dumps(meta, ensure_ascii=False), "last_error": "",
+        })
+        scheduled_at = None
+        slot = at
+        if slot in (None, ""):
+            item = self._one("SELECT slot_at FROM crm_plan_items WHERE post_id = ?", (post_id,))
+            slot = (item or {}).get("slot_at")
+        if slot not in (None, ""):
+            epoch = self._slot_epoch(slot)
+            if epoch is not None:
+                self.schedule_post(post_id, int(epoch), approved=True)
+                scheduled_at = int(epoch)
+        self.notify("content", "أُرفقت الوسائط",
+                    f"«{self._label(post)}» جاهز" + (" ومجدول" if scheduled_at else ""),
+                    f"/ui/post/{post_id}")
+        return {"post_id": post_id, "media_path": destination, "kind": chosen,
+                "bytes": size, "scheduled_at": scheduled_at}
+
+    def lint_post(self, post_id: str) -> dict:
+        """Pre-publish checks the agent can run before scheduling or approving."""
+        post = self.get_channel_post(post_id)
+        if not post:
+            raise ValueError("المنشور غير موجود")
+        issues = []
+        title = (post.get("title") or "").strip()
+        body = (post.get("body") or "").strip()
+        kind = (post.get("media_type") or "none").lower()
+        if not title and not body:
+            issues.append({"code": "empty", "severity": "error", "message": "لا عنوان ولا نص"})
+        if len(body) > 1024:
+            issues.append({"code": "too_long", "severity": "warning",
+                           "message": f"النص {len(body)} حرفًا — قد يُختصر في القناة"})
+        if kind in self.MEDIA_EXTS and not post.get("media_path"):
+            issues.append({"code": "media_missing", "severity": "error",
+                           "message": f"منشور {kind} بلا ملف — أرفق الوسائط أولًا"})
+        if post.get("status") in ("scheduled", "publishing") and post.get("scheduled_at"):
+            window = 1800
+            clash = self._one(
+                "SELECT id, title, scheduled_at FROM crm_posts WHERE id != ? AND status IN "
+                "('scheduled','publishing') AND ABS(scheduled_at - ?) < ? LIMIT 1",
+                (post_id, int(post["scheduled_at"]), window))
+            if clash:
+                issues.append({"code": "slot_collision", "severity": "warning",
+                               "message": f"موعد قريب من «{clash['title'] or clash['id']}»"})
+        tokens = set(_tokens(f"{title} {title} {body}"))
+        if tokens:
+            rows = self._all("SELECT id, title, body FROM crm_posts WHERE id != ?", (post_id,))
+            for row in rows:
+                other = set(_tokens(f"{row['title'] or ''} {row['title'] or ''} {row['body'] or ''}"))
+                if not other:
+                    continue
+                similarity = len(tokens & other) / len(tokens | other)
+                if similarity >= 0.75:
+                    issues.append({"code": "duplicate", "severity": "warning",
+                                   "message": f"يشبه «{(row['title'] or row['id'])[:40]}» "
+                                              f"({round(similarity * 100)}%)"})
+                    break
+        blocking = [i for i in issues if i["severity"] == "error"]
+        return {"post_id": post_id, "ok": not blocking, "issues": issues}
+
+    def best_slot(self, kind: str | None = None, days: int = 90) -> dict:
+        """Best weekday/hour for a content type, avoiding clashes with what is queued."""
+        offset = self.tz_offset
+        since = _now() - max(7, days) * 86400
+        sql = ("SELECT published_at, views, media_type FROM crm_posts WHERE status='published' "
+               "AND published_at IS NOT NULL AND published_at >= ?")
+        rows = self._all(sql, (since,))
+        if kind:
+            filtered = [r for r in rows if (r["media_type"] or "none") in (kind, "none")]
+            rows = filtered or rows
+        if not rows:
+            raise ValueError("لا بيانات كافية لاقتراح وقت")
+        buckets: dict[tuple[int, int], list[int]] = {}
+        for row in rows:
+            local = dt.datetime.utcfromtimestamp(int(row["published_at"])) + dt.timedelta(hours=offset)
+            buckets.setdefault((local.weekday(), local.hour), []).append(row["views"] or 0)
+        ranked = sorted(buckets.items(), key=lambda kv: (-(sum(kv[1]) / len(kv[1])), -len(kv[1])))
+        now_local = dt.datetime.utcfromtimestamp(_now()) + dt.timedelta(hours=offset)
+        for (weekday, hour), views in ranked:
+            for week in range(0, 4):
+                days_ahead = (weekday - now_local.weekday()) % 7 + week * 7
+                candidate = (now_local + dt.timedelta(days=days_ahead)).replace(
+                    hour=hour, minute=0, second=0, microsecond=0)
+                if candidate <= now_local + dt.timedelta(hours=2):
+                    continue
+                epoch = int(candidate.replace(tzinfo=dt.UTC).timestamp()) - offset * 3600
+                clash = self._one(
+                    "SELECT id FROM crm_posts WHERE status IN ('scheduled','publishing') "
+                    "AND ABS(scheduled_at - ?) < 3600 LIMIT 1", (epoch,))
+                if clash:
+                    continue
+                return {"kind": kind or "all", "weekday": candidate.weekday(), "hour": hour,
+                        "samples": len(views), "avg_views": round(sum(views) / len(views), 1),
+                        "local": candidate.strftime("%Y-%m-%d %H:%M"), "slot_at": epoch}
+        raise ValueError("كل الشرائح الجيدة متعارضة — أبعد المواعيد أو ألغِ واحدًا")
 
     # -- weekly plans -------------------------------------------------------
     PLAN_KINDS = ("text", "image", "video", "audio", "file", "link")

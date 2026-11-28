@@ -84,6 +84,7 @@ types and proposed times, all in `draft`.
 | R-21 | Topic intelligence: `content_gaps` + `semantic_search` | v3.4.0 | [0012](docs/features/0012-topic-intelligence.md) |
 | R-22 | `edge-mcp` Worker: extract + search over MCP | v3.5.0 | [0013](docs/features/0013-edge-mcp.md) |
 | R-23 | Weekly plan object + approval + Sunday digest | v3.6.0 | [0014](docs/features/0014-weekly-plan-and-digest.md) |
+| R-24 | Attach media, lint before publishing, best slot | v3.7.0 | [0015](docs/features/0015-media-lint-slot.md) |
 
 ---
 

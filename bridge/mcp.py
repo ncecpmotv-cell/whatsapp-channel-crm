@@ -25,6 +25,8 @@ INSTRUCTIONS = (
     "للتحليل استخدم content_gaps وcontent_insights وposting_times قبل اقتراح أي خطة. "
     "قبل اختراع زاوية جديدة، ابحث في الأرشيف بـsemantic_search وأعد استخدام ما نجح. "
     "لخطة أسبوع: احفظها بـcrm_save_plan ثم اعرضها؛ لا تستدعِ crm_approve_plan إلا بعد موافقة صريحة. "
+    "قبل أي جدولة: crm_lint_post، واختر الوقت بـcrm_best_slot. "
+    "إذا أرسل المستخدم صورة أو فيديو: crm_attach_media(path=المسار المحلي). "
     "أنشئ مسودة بـ crm_create_channel_post ثم اقترح وقتًا بـ content_schedule — "
     "النشر النهائي قرار بشري من الواجهة."
 )
@@ -187,6 +189,43 @@ TOOLS = [
                 },
             },
             "required": ["week_start", "items"],
+        },
+    },
+    {
+        "name": "crm_attach_media",
+        "description": "Attach a local file (the path PicoClaw downloaded for a Telegram photo/"
+                       "video) to a post. Schedules it at the plan slot when one exists.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "post_id": {"type": "string"},
+                "path": {"type": "string", "description": "absolute path of the downloaded file"},
+                "kind": {"type": "string", "enum": ["image", "video", "audio", "file"]},
+                "at": {"type": "string", "description": "optional 'YYYY-MM-DD HH:MM'"},
+            },
+            "required": ["post_id", "path"],
+        },
+    },
+    {
+        "name": "crm_lint_post",
+        "description": "Pre-publish checks: empty content, missing media, duplicate of an earlier "
+                       "post, slot collision. Run it before scheduling or approving.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"post_id": {"type": "string"}},
+            "required": ["post_id"],
+        },
+    },
+    {
+        "name": "crm_best_slot",
+        "description": "Best weekday/hour for a content type from the channel's own history, "
+                       "returning the next free slot ('YYYY-MM-DD HH:MM' + epoch).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["text", "image", "video", "audio", "file", "link"]},
+                "days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 90},
+            },
         },
     },
     {
@@ -459,6 +498,18 @@ class McpServer:
             items=args.get("items") or [],
             title=args.get("title") or "",
             notes=args.get("notes") or "")
+
+    def _tool_crm_attach_media(self, args: dict) -> dict:
+        if not args.get("post_id") or not args.get("path"):
+            raise McpError(-32602, "post_id and path are required")
+        return self.crm.attach_media(args["post_id"], args["path"],
+                                     kind=args.get("kind"), at=args.get("at"))
+
+    def _tool_crm_lint_post(self, args: dict) -> dict:
+        return self.crm.lint_post(args.get("post_id") or "")
+
+    def _tool_crm_best_slot(self, args: dict) -> dict:
+        return self.crm.best_slot(args.get("kind"), int(args.get("days") or 90))
 
     def _tool_crm_get_plan(self, args: dict) -> dict:
         plan = self.crm.get_plan(plan_id=args.get("plan_id"), week_start=args.get("week_start"))

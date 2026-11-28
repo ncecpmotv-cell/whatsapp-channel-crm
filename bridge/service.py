@@ -92,7 +92,8 @@ class Bridge:
                  gowa: GowaClient | None = None, store: Store | None = None):
         self.cfg = cfg
         self.store = store or Store(cfg.db_path)
-        self.crm = crm or CrmClient(self.store, getattr(self.cfg, "tz_offset", 3))
+        self.crm = crm or CrmClient(self.store, getattr(self.cfg, "tz_offset", 3),
+                                    media_dir=getattr(self.cfg, "media_dir", ""))
         try:
             from notify import PushNotifier
             self.crm.pusher = PushNotifier(self.cfg)

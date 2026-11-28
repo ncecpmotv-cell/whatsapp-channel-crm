@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] — 2026-11-27
+
+### Added
+
+- `crm_attach_media(post_id, path)` — attach the file PicoClaw downloaded from Telegram
+  (or any local file under `ATTACH_ROOTS`), validate kind/size/extension, read image
+  dimensions, and schedule at the plan slot when one exists.
+- `crm_lint_post(post_id)` — pre-publish checks: empty content, missing media, near-duplicate
+  of an earlier post (Jaccard ≥ 75 %), and a scheduled slot within 30 minutes of another post.
+- `crm_best_slot(kind)` — best weekday/hour for a content type from the channel's own history,
+  skipping slots already occupied; returns local time + epoch.
+
 ## [3.6.1] — 2026-11-27
 
 ### Fixed

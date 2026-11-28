@@ -1,4 +1,5 @@
 
+import json
 import os
 import sys
 import tempfile
@@ -126,6 +127,47 @@ class CrmTest(unittest.TestCase):
         post = self.crm.get_channel_post(result["posts"][0])
         self.assertEqual(post["status"], "scheduled")
         self.assertEqual(len(self.crm.due_posts()), 1)
+
+    def test_attach_media_then_lint_and_best_slot(self):
+        os.environ["ATTACH_ROOTS"] = self.tmp
+        self.addCleanup(lambda: os.environ.pop("ATTACH_ROOTS", None))
+        post = self.crm.create_channel_post({
+            "channel_jid": "1203630@newsletter", "title": "صورة المنتج", "body": "نص",
+            "media_type": "image"})
+        before = self.crm.lint_post(post["id"])
+        self.assertFalse(before["ok"])
+        self.assertIn("media_missing", [i["code"] for i in before["issues"]])
+
+        # a real PNG header (1x1) so the dimension parser runs
+        png = (b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR" +
+               (1).to_bytes(4, "big") + (1).to_bytes(4, "big") + b"\x08\x06\x00\x00\x00")
+        source = os.path.join(self.tmp, "probe.png")
+        with open(source, "wb") as fh:
+            fh.write(png + b"\x00" * 40)
+
+        result = self.crm.attach_media(post["id"], source)
+        self.assertTrue(result["media_path"].endswith(".png"))
+        refreshed = self.crm.get_channel_post(post["id"])
+        self.assertEqual(refreshed["media_type"], "image")
+        self.assertTrue(refreshed["media_path"])
+        meta = json.loads(refreshed["meta"] or "{}")
+        self.assertEqual(meta.get("width"), 1)
+        self.assertTrue(self.crm.lint_post(post["id"])["ok"])
+
+        # outside the allowed roots is refused
+        with self.assertRaises(ValueError):
+            self.crm.attach_media(post["id"], "/etc/passwd")
+
+    def test_best_slot_returns_a_free_future_slot(self):
+        post = self.crm.create_channel_post({"channel_jid": "1@newsletter",
+                                             "title": "قديم", "body": "س"})
+        self.crm.mark_published(post["id"], "M1")
+        self.store.conn.execute("UPDATE crm_posts SET views=20, published_at=? WHERE id=?",
+                                (int(time.time()) - 7 * 86400, post["id"]))
+        self.store.conn.commit()
+        slot = self.crm.best_slot("text")
+        self.assertIn("slot_at", slot)
+        self.assertGreater(slot["slot_at"], time.time())
 
     def test_media_plan_items_stay_drafts_until_media_exists(self):
         plan = self.crm.save_plan("2026-12-21", [

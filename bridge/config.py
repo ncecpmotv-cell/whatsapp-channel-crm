@@ -59,6 +59,7 @@ class Config:
     digest_weekday: int = 6   # Sunday (Monday = 0)
     digest_hour: int = 20
     picoclaw_home: str = "~/pico"
+    media_dir: str = ""
 
     @classmethod
     def load(cls, path: str | None = None) -> Config:
@@ -115,6 +116,7 @@ class Config:
             digest_weekday=get_int("DIGEST_WEEKDAY", 6),
             digest_hour=get_int("DIGEST_HOUR", 20),
             picoclaw_home=os.path.expanduser(get("PICOCLAW_HOME") or "~/pico"),
+            media_dir=os.path.expanduser(get("MEDIA_DIR") or "~/crm/var/media"),
         )
         cfg.validate()
         return cfg
@@ -138,5 +140,5 @@ _KNOWN_KEYS = {
     "AGENT_CAN_PUBLISH", "DAILY_PUBLISH_CAP", "GOWA_USER", "GOWA_PASSWORD",
     "APP_TZ_OFFSET", "PUBLIC_BASE_URL", "TRUSTED_ORIGINS", "ALLOW_TAILNET_DOMAIN",
     "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PUSH_EVENTS",
-    "DIGEST_ENABLED", "DIGEST_WEEKDAY", "DIGEST_HOUR", "PICOCLAW_HOME",
+    "DIGEST_ENABLED", "DIGEST_WEEKDAY", "DIGEST_HOUR", "PICOCLAW_HOME", "MEDIA_DIR",
 }

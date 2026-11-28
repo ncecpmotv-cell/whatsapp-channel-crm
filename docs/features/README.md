@@ -20,6 +20,7 @@ how it works, how it was verified, and what it refuses to do. The template is
 | [0012](0012-topic-intelligence.md) | Topic gaps + BM25 search over the archive | shipped | R-21 |
 | [0013](0013-edge-mcp.md) | edge-mcp: cloud tools that keep the phone light | shipped* | R-22 |
 | [0014](0014-weekly-plan-and-digest.md) | Weekly plan object, one-tap approval, Sunday digest | shipped | R-23 |
+| [0015](0015-media-lint-slot.md) | Media from Telegram, pre-publish lint, best slot | shipped | R-24 |
 
 ## Adding one
 
