@@ -12,13 +12,14 @@ compatibility_date = "2026-11-01"
 [vars]
 MAX_CHARS = "6000"
 
-[[r2_buckets]]
-binding = "BACKUPS"
-bucket_name = "crm-backups"
+# R2 is disabled until the bucket is enabled in the dashboard (code 10042).
+# [[r2_buckets]]
+# binding = "BACKUPS"
+# bucket_name = "crm-backups"
 
 [[kv_namespaces]]
 binding = "STATUS"
-id = "REPLACE_WITH_KV_ID"
+id = "9114b63f0a7347bb984f52f0e8235f5b"
 
 [ai]
 binding = "AI"

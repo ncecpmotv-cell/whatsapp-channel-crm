@@ -31,6 +31,8 @@ class EdgeClient:
                  headers: dict | None = None) -> tuple[int, bytes]:
         request = urllib.request.Request(f"{self.base_url}{path}", data=body, method=method)
         request.add_header("Authorization", f"Bearer {self.token}")
+        # Cloudflare's bot rules answer bare urllib with 1010; a real UA is enough.
+        request.add_header("User-Agent", "phone-crm-edge/1.0 (+https://github.com/ncecpmotv-cell/whatsapp-channel-crm)")
         for key, value in (headers or {}).items():
             request.add_header(key, value)
         try:
